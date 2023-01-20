@@ -13,6 +13,7 @@
 #include "bit.h"
 #include "lcd.h"
 
+//a random comment
 critical_section_t critsec;
 
 const char promptString[] = "\r\nMAIN COM (?= help menu): ";
