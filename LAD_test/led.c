@@ -10,6 +10,7 @@
 
 bool dayMode = true;
 uint16_t pwm = 0;
+int connectedChannels=0;
 
 #define PWM_REG 0x00
 #define CURRENT_REG 0x02
@@ -50,85 +51,111 @@ float set_pwm(float new)
     data[0]=pwm&0x0ff;
     data[1]= pwm>>8;
     for (int ch = 1;ch<3;ch++){
-        int count = i2c_reg_write(ch,pwmAddr,PWM_REG,data,2);
-        if (count != 2)
+        if (ch & connectedChannels)
         {
-            printf("wrote %d bytes to CH%d (expected 2)\r\n",ch,count);
+            int count = i2c_reg_write(ch,pwmAddr,PWM_REG,data,2);
+            if (count != 2)
+            {
+                printf("wrote %d bytes to CH%d (expected 2)\r\n",ch,count);
+            }
         }
     }
 
     return new;
 }
 
-void led_init_all()
+int led_init_all()
 {
+    connectedChannels = 0;
 
     for (int ch=1;ch<3;ch++) // CHANGE to 1 - 2 when we have the full test board
     {
-        // THese Init values reset bit values that need to be cleared after power on.
-        i2c_reg_write(ch,ADDR_LED_DAY,0X0E,(uint8_t *)&INIT_VAL,2);
-        i2c_reg_write(ch,ADDR_LED_DAY,0X10,(uint8_t *)&INIT_VAL,2);
-        //i2c_reg_write(ch,ADDR_LED_DAY,0X12,(uint8_t *)&INIT_VAL,2);
-        i2c_reg_write(ch,ADDR_LED_NIGHT,0X0E,(uint8_t *)&INIT_VAL,2);
-        i2c_reg_write(ch,ADDR_LED_NIGHT,0X10,(uint8_t *)&INIT_VAL,2);
-        //i2c_reg_write(ch,ADDR_LED_NIGHT,0X12,(uint8_t *)&INIT_VAL,2);
+        if ((qScan(ch,ADDR_LED_DAY)== ADDR_LED_DAY)  && (qScan(ch,ADDR_LED_NIGHT)== ADDR_LED_NIGHT))
+        {
+            connectedChannels |= ch;
+            // THese Init values reset bit values that need to be cleared after power on.
+            i2c_reg_write(ch,ADDR_LED_DAY,0X0E,(uint8_t *)&INIT_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_DAY,0X10,(uint8_t *)&INIT_VAL,2);
+            //i2c_reg_write(ch,ADDR_LED_DAY,0X12,(uint8_t *)&INIT_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_NIGHT,0X0E,(uint8_t *)&INIT_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_NIGHT,0X10,(uint8_t *)&INIT_VAL,2);
+            //i2c_reg_write(ch,ADDR_LED_NIGHT,0X12,(uint8_t *)&INIT_VAL,2);
 
-        // turn off the leds
-        i2c_reg_write(ch,ADDR_LED_DAY,PWM_REG,(uint8_t *)&OFF_VAL,2);
-        i2c_reg_write(ch,ADDR_LED_NIGHT,PWM_REG,(uint8_t *)&OFF_VAL,2);
-        // configure slope function
-        i2c_reg_write(ch,ADDR_LED_DAY,0X04,(uint8_t *)&SLOPE_VAL,2);
-        i2c_reg_write(ch,ADDR_LED_NIGHT,0X04,(uint8_t *)&SLOPE_VAL,2);
+            // turn off the leds
+            i2c_reg_write(ch,ADDR_LED_DAY,PWM_REG,(uint8_t *)&OFF_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_NIGHT,PWM_REG,(uint8_t *)&OFF_VAL,2);
+            // configure slope function
+            i2c_reg_write(ch,ADDR_LED_DAY,0X04,(uint8_t *)&SLOPE_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_NIGHT,0X04,(uint8_t *)&SLOPE_VAL,2);
+        }
+        
     }
+    return connectedChannels;
 }
 
 float day(float pwm_percent,int ch)
 {
-    if (pwm_percent > 0.8)
-        pwm_percent = 0.8;
-    dayMode = true;
-    i2c_reg_write(ch,ADDR_LED_NIGHT,PWM_REG,(uint8_t *)&OFF_VAL,2);
-    pwm = 65535 * pwm_percent;
-    int count = i2c_reg_write(ch,ADDR_LED_DAY,PWM_REG,(uint8_t *)&pwm,2);
-    if (count != 2)
-    {   
-        printf("Failed writing day PWM reg");
-        return -1;
+    if (ch & connectedChannels)
+    {
+        if (pwm_percent > 0.8)
+            pwm_percent = 0.8;
+        dayMode = true;
+        i2c_reg_write(ch,ADDR_LED_NIGHT,PWM_REG,(uint8_t *)&OFF_VAL,2);
+        pwm = 65535 * pwm_percent;
+        int count = i2c_reg_write(ch,ADDR_LED_DAY,PWM_REG,(uint8_t *)&pwm,2);
+        if (count != 2)
+        {   
+            printf("Failed writing day PWM reg");
+            return -1;
+        }
+        return pwm_percent;
     }
-    return pwm_percent;
+    return 0;
 }
 
 float night(float pwm_percent,int ch)
 {
-    if (pwm_percent > 1.0)
-        pwm_percent = 1.0;
-    dayMode = false;
-    i2c_reg_write(ch,ADDR_LED_DAY,PWM_REG,(uint8_t *)&OFF_VAL,2);
-    pwm = 65535 * pwm_percent;
-    int count = i2c_reg_write(ch,ADDR_LED_NIGHT,PWM_REG,(uint8_t *)&pwm,2);
-    if (count != 2)
-        return -1;
-    return pwm_percent;
+    if (ch & connectedChannels)
+    {
+        if (pwm_percent > 1.0)
+            pwm_percent = 1.0;
+        dayMode = false;
+        i2c_reg_write(ch,ADDR_LED_DAY,PWM_REG,(uint8_t *)&OFF_VAL,2);
+        pwm = 65535 * pwm_percent;
+        int count = i2c_reg_write(ch,ADDR_LED_NIGHT,PWM_REG,(uint8_t *)&pwm,2);
+        if (count != 2)
+            return -1;
+        return pwm_percent;
+    }
+    return 0;
 }
 
 uint16_t read_current(int ch)
 {
-    uint16_t value; 
-    i2c_reg_read(ch,ADDR_LED_DAY,CURRENT_REG,(uint8_t *)&value,2);
-    return value;
+    if (ch & connectedChannels)
+    {
+        uint16_t value; 
+        i2c_reg_read(ch,ADDR_LED_DAY,CURRENT_REG,(uint8_t *)&value,2);
+        return value;
+    }
+    return 0;
 }
 
 float read_temperature(int rail, int ch)
 {
-    uint8_t buf[2];
-    uint16_t value; 
-    float volt,temp;
-    i2c_reg_read(ch,(rail==RAIL1)?ADDR_THM1:ADDR_THM2,THERM_VOLTAGE_REG,buf,2);
-    value = ((buf[0] << 4) & 0xf0) + ((buf[1] >> 4) & 0x0f);
-    //printf("channel %d Thermistor %d register = 0x%x 0x%x (%d) \n",ch,rail,buf[0],buf[1],value); 
-    volt = 0.006445 + (value * 0.01279); 
-    //printf("Thermistor voltage = %2.2fV\n",volt);
-    temp = -17.117*powintf(volt,5) + 136.43*powintf(volt,4) - 422.64* powintf(volt,3) + 637.92*powintf(volt,2) - 519.45*volt + 276.24;
-    //printf("Thermistor Temp = %f degC",temp);
-    return temp;
+    if (ch & connectedChannels)
+    {
+        uint8_t buf[2];
+        uint16_t value; 
+        float volt,temp;
+        i2c_reg_read(ch,(rail==RAIL1)?ADDR_THM1:ADDR_THM2,THERM_VOLTAGE_REG,buf,2);
+        value = ((buf[0] << 4) & 0xf0) + ((buf[1] >> 4) & 0x0f);
+        //printf("channel %d Thermistor %d register = 0x%x 0x%x (%d) \n",ch,rail,buf[0],buf[1],value); 
+        volt = 0.006445 + (value * 0.01279); 
+        //printf("Thermistor voltage = %2.2fV\n",volt);
+        temp = -17.117*powintf(volt,5) + 136.43*powintf(volt,4) - 422.64* powintf(volt,3) + 637.92*powintf(volt,2) - 519.45*volt + 276.24;
+        //printf("Thermistor Temp = %f degC",temp);
+        return temp;
+    }
+    return 0;
 }

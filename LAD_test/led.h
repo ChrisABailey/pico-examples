@@ -6,8 +6,9 @@
 #endif
 
 
-// Set up backlight
-void led_init_all();
+// Set up backlight on CH1
+// Return bit array of led channels successfully found (CH1 | CH2)
+int led_init_all();
 
 
 /// @brief retrurns current Backlight mode

@@ -19,6 +19,7 @@ typedef struct  {
                 } cop_data_t;                        
 
 typedef struct {
+                int failedReads;
                 elapsed_time_t elapsedTime;
                 float   temperature;
                 bool    lcdGood;
@@ -51,7 +52,10 @@ extern LCD_BIT_t last_LCD_BIT_CH2;
 
 void lcd_init_all();
 void print_status(LCD_BIT_t* BIT);
-LCD_BIT_t *read_LCD_status(int ch);
+
+// reads the serial port associated with ch
+// returns false if we need to read more data, true if we are complete
+bool read_LCD_status(int ch);
 
 #ifdef __cplusplus
  }

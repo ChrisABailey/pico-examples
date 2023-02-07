@@ -12,9 +12,10 @@
 
 LCD_BIT_t last_LCD_BIT_CH1;
 LCD_BIT_t last_LCD_BIT_CH2;
+int connectedLCDs = 0;
 
 /// @brief zero out BIT structure passed in
-void init_BIT(int ch)
+void init_BIT_struct(int ch)
 {
     LCD_BIT_t *BIT;
     if (ch==CH1)
@@ -25,6 +26,7 @@ void init_BIT(int ch)
     {
         BIT = &last_LCD_BIT_CH2;
     }
+    BIT->failedReads = 0;
     BIT->elapsedTime.hours = 0;
     BIT->elapsedTime.mins = 0;
     BIT->elapsedTime.secs = 0;
@@ -67,6 +69,8 @@ void init_BIT(int ch)
 
 void lcd_init_all()
 {
+    connectedLCDs = CH1|CH2;
+
     // Set up our UART with a basic baud rate.
     uart_init(uart0, LCD_BAUD);
     uart_init(uart1, LCD_BAUD);
@@ -86,14 +90,15 @@ void lcd_init_all()
     //uart_set_fifo_enabled(uart0, false);
     //uart_set_fifo_enabled(uart1, false);
 
-    init_BIT(CH1);
-    init_BIT(CH2);
+    // zero out the LCD BIT structures
+    init_BIT_struct(CH1);
+    init_BIT_struct(CH2);
 }
 
 //The FPGA returns a series of 6 byte commands, each starts with 0xFF followed by a command ID and 4 bytes of data.
 LCD_BIT_t* parseStatus(int ch, uint8_t *lastPacket, int len)
 {
-    int cur=0;
+    int cur=0,ccount=0;
     uint8_t cmd;
     LCD_BIT_t *BIT;
 
@@ -105,10 +110,12 @@ LCD_BIT_t* parseStatus(int ch, uint8_t *lastPacket, int len)
     {
         BIT = &last_LCD_BIT_CH2;
     }
+    BIT->failedReads = 0;
     while (cur < len-5)
     {
         if (lastPacket[cur++] == 0xFF) // look for start byte of a cmd
         {
+            ccount++;
             cmd = lastPacket[cur];
             switch (cmd)
             {
@@ -228,16 +235,25 @@ LCD_BIT_t* parseStatus(int ch, uint8_t *lastPacket, int len)
                     break;
                 }
                 case ET_TP_I2C_CMD:   //Not checked
-                break;
+                    break;
+                case 0xFF:  // found another command start so special case
+                    cur -= 5;
+                    break;
                 default:
                 {
-                    //printf(" unhandled Command = [0x%x] \r\n",cmd);
+                    printf(" unhandled Command = [0x%x] \r\n",cmd);
                 }
             }
             cur+=5;
         }
 
         
+    }
+    
+    if (ccount < 10)
+    {
+        printf("%d cmds found for CH%d\r\n",ccount,ch);
+        printf("%d,%d,%d,%d,%d,%d\r\n",lastPacket[0],lastPacket[1],lastPacket[2],lastPacket[3],lastPacket[4],lastPacket[5]);
     }
     return BIT;
 }
@@ -247,14 +263,15 @@ LCD_BIT_t* parseStatus(int ch, uint8_t *lastPacket, int len)
 
 
 ///@brief Read Status from CH ch UART and parse it into LCD Status Struct
-LCD_BIT_t *read_LCD_status(int ch) {
+bool read_LCD_status(int ch) {
     uint8_t lastPacket[STATUS_LEN]; // allow for a full packet + a partial cmd from previous pkt 
     uint32_t startTime,currTime;
     int i=0;
     bool start=false;
     uint8_t c;
 
-    uart_inst_t *uart = (ch==CH1)?uart0:uart1;
+    // pin GP5 is always associated with UART1 GP13 is assoiated with UART0
+    uart_inst_t *uart = (ch==CH2)?uart0:uart1;
     
     if(uart_is_readable_within_us(uart,FRAME_TIME)) // wait up to one frame for data 
     {
@@ -262,8 +279,24 @@ LCD_BIT_t *read_LCD_status(int ch) {
     }
     else
     {
+        if (ch==CH1)
+        {
+            if (last_LCD_BIT_CH1.failedReads++ > 100)
+            {
+                connectedLCDs = connectedLCDs & !CH1;
+                return true;
+            }
+        }
+        else
+        {
+            if (last_LCD_BIT_CH2.failedReads++ > 100)
+            {
+                connectedLCDs = connectedLCDs & !CH2;
+                return true;
+            }
+        }
         //printf("Uart%d not readable within %duS\r\n",ch-1,FRAME_TIME);
-        return NULL;
+        return true;
     }
 
     //there is some data in the queue, it should take about 4mS to read all of the data for one frame
@@ -271,7 +304,7 @@ LCD_BIT_t *read_LCD_status(int ch) {
     currTime=startTime;
 
     //read full status data or timeout after one frame sec
-    while (i<STATUS_LEN-6 && ((currTime - startTime) < (4500))) //
+    while (i<STATUS_LEN-9 && ((currTime - startTime) < (4500))) //
     {
         // the first status command is always 0xFF00 (elapsed time)
 
@@ -311,18 +344,25 @@ LCD_BIT_t *read_LCD_status(int ch) {
 
     if (i>101)
     {  // got a full message so parse it
-        return parseStatus(ch,lastPacket,i);
+        //printf("read_status(CH%d) returned %d Bytes\r\n",ch,i);
+        parseStatus(ch,lastPacket,i);
+        return true;
     }
     else
     {
-        //    printf("read_status(CH%d) returned %d Bytes\r\n",ch,i);
-        return NULL;
+        //printf("read_status(CH%d) returned %d Bytes\r\n",ch,i);
+        return false;
     }
 
 }
 
 void print_status(LCD_BIT_t* BIT)
 {
+    if (BIT->failedReads > 50)
+    {
+        printf("LCD not responding (%d failed reads)\r\n",BIT->failedReads);
+        return;
+    }
     uint16_t h = BIT->elapsedTime.hours;
     uint8_t m = BIT->elapsedTime.mins;
     uint8_t s = BIT->elapsedTime.secs;

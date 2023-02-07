@@ -19,10 +19,10 @@ void i2c_init_all(){
     gpio_set_function(I2C_CH1_SCL_PIN, GPIO_FUNC_I2C);
     gpio_set_function(I2C_CH2_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(I2C_CH2_SCL_PIN, GPIO_FUNC_I2C);
-    //gpio_pull_up(I2C_CH1_SDA_PIN);
-    //gpio_pull_up(I2C_CH1_SCL_PIN);
-    //gpio_pull_up(I2C_CH2_SDA_PIN);
-    //gpio_pull_up(I2C_CH2_SCL_PIN);
+    gpio_pull_up(I2C_CH1_SDA_PIN);
+    gpio_pull_up(I2C_CH1_SCL_PIN);
+    gpio_pull_up(I2C_CH2_SDA_PIN);
+    gpio_pull_up(I2C_CH2_SCL_PIN);
     // Make the I2C pins available to picotool
     bi_decl(bi_2pins_with_func(I2C_CH1_SDA_PIN, I2C_CH1_SCL_PIN, GPIO_FUNC_I2C));
     bi_decl(bi_2pins_with_func(I2C_CH2_SDA_PIN, I2C_CH2_SCL_PIN, GPIO_FUNC_I2C));
@@ -56,6 +56,34 @@ void i2c_scan(int channel) {
         printf(ret < 0 ? "." : "@");
         printf(addr % 16 == 15 ? "\n" : "  ");
     }
+}
+
+int qScan(int channel, int start)
+{
+    int addr;
+    for (addr = start; addr < (1 << 7); ++addr) {
+
+
+        // Perform a 1-byte dummy read from the probe address. If a slave
+        // acknowledges this address, the function returns the number of bytes
+        // transferred. If the address byte is ignored, the function returns
+        // -1.
+
+        // Skip over any reserved addresses.
+        int ret;
+        uint8_t rxdata;
+        if (reserved_addr(addr))
+            ret = PICO_ERROR_GENERIC;
+        else
+        {
+            critical_section_enter_blocking(&critsec);
+            ret = i2c_read_timeout_us((channel == CH1)?i2c0:i2c1, addr, &rxdata, 1, false,16000);
+            critical_section_exit(&critsec);
+        }
+        if (ret>=0) 
+            return addr;
+    }    
+    return addr;
 }
 
 // Write nbytes byte in buf to the specified register

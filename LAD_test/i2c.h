@@ -10,6 +10,10 @@
 void i2c_init_all();
 void i2c_scan(int channel);
 
+// Scan the i2C bus
+// Return the first addr that responds after the start addr
+int qScan(int channel, int start);
+
 int i2c_reg_write(int channel, 
                 const uint addr, 
                 const uint8_t reg, 

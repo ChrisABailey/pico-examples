@@ -5,7 +5,18 @@
 #include "bit.h"
 #include "i2c.h"
 
+int i2c_channels = 0;
 
+int bit_init_all()
+{
+    for (int ch=CH1;ch<=CH2;ch++)
+    {
+        if (qScan(ch,ADDR_BIT) == ADDR_BIT)
+        {
+            i2c_channels |= ch;
+        }
+    }
+}
 void print_bit(uint8_t result)
 {
     if (result == 0xFF)
@@ -29,11 +40,15 @@ void print_bit(uint8_t result)
 uint8_t read_bit(int ch)
 {
     uint8_t value = 0; 
-    int count = i2c_reg_read(ch,ADDR_BIT,0x00,&value,1);
-    if (count!= 1)
+    if (ch & i2c_channels)
     {
-        printf("Read returned %d bytes (expected 1)\r\n",count);
-        return 0;
+        int count = i2c_reg_read(ch,ADDR_BIT,0x00,&value,1);
+        if (count!= 1)
+        {
+            printf("Read returned %d bytes (expected 1)\r\n",count);
+            return 0;
+        }
+        return value;
     }
-    return value;
+    return 0;
 }
