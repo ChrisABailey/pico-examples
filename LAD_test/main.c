@@ -95,7 +95,7 @@ bool lcd_status_timer_callback(struct repeating_timer *t) {
 
     critical_section_enter_blocking (&critsec);
     // this should take less than 1 frame and typically < 3.5mS
-    if (read_LCD_status(ch) != NULL)
+    if (read_LCD_status(ch))
     {
         // read a complete packet so next time read the other channel
         ch = (ch==CH1)?CH2:CH1;
@@ -106,6 +106,38 @@ bool lcd_status_timer_callback(struct repeating_timer *t) {
     return true;
 }
 
+void initialize()
+{
+    i2c_init_all();
+    printf("i2c up\r\n");
+    int chs = led_init_all();
+    if (chs == CH1)
+    {
+        printf("LED CH1 up\r\n");
+    }
+    else if (chs == CH2)
+    {
+        printf("LED CH2 up\r\n");
+    }
+    else if (chs == (CH1|CH2))
+    {
+        printf("LED CH1 & CH2 up\r\n");
+    }
+    else
+    {
+        printf("Failed to contact LED controllers\r\n");
+    }    
+    lcd_init_all();
+    printf("LCD up\r\n");
+
+    chs = bit_init_all();
+
+    printf("BIT Channel 1 %s, BIT Channel 2 %s \r\n",(chs & CH1)? "Up":"not found",(chs & CH2)? "Up":"not found");
+
+    day(0.25,CH1);
+    day(0.25,CH2);
+
+}
 
 void printStatus()
 {   
@@ -119,9 +151,9 @@ void printStatus()
     printf("PD_CH1_PIN        = %s\r\n",gpio_get(PD_CH1_PIN)?"OK":"Disabled");
     printf("PD_CH2_PIN        = %s\r\n",gpio_get(PD_CH2_PIN)?"OK":"Disabled");
 
-    printf("\r\nChannel 1 Controler Board BIT :");
+    printf("\r\nChannel 1 Controler Board BIT Register:");
     print_bit(read_bit(CH1));
-    printf("\r\nChannel 2 Controler Board BIT :");
+    printf("\r\nChannel 2 Controler Board BIT Register:");
     print_bit(read_bit(CH2));
     printf("\r\n=========================\r\n");
 }
@@ -182,15 +214,9 @@ int handleMenuKey(char key,bool echo)
         }
         case 'i':
         {
-            i2c_init_all();
+            initialize();
             i2c_scan(CH1);  
             i2c_scan(CH2);
-
-            led_init_all();
-            day(0.25,CH1);
-            day(0.25,CH2);
-            
-            lcd_init_all();
 
             break;
         }
@@ -301,17 +327,7 @@ int main() {
     printf("USB Uart Connected()\n");
 
 
-    i2c_init_all();
-    printf("i2c up\n");
-    led_init_all();
-    printf("LED up\n");
-    lcd_init_all();
-    printf("LCD up\n");
-
-    //printf("LED Driver Current = 0x%x\n",read_current(CH2));
-
-    day(0.25,CH1);
-    day(0.25,CH2);
+    initialize();
 
     // Create a repeating timer that reads the LCD status uarts.
     add_repeating_timer_ms(14, lcd_status_timer_callback, NULL, &statusTimer);
