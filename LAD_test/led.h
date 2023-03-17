@@ -45,6 +45,9 @@ float set_pwm(float new);
 /// @return temterature in Deg Kelvin
 float read_temperature(int rail, int ch);
 
+int get_connected_channels();
+void set_connected_channels(int ch);
+
 #ifdef __cplusplus
  }
 #endif

@@ -19,6 +19,23 @@ const uint16_t INIT_VAL = 0XFFFF;
 const uint16_t OFF_VAL = 0X0000; 
 const uint16_t SLOPE_VAL = 0X030A;
 
+int get_connected_channels() 
+{
+    return connectedChannels;
+}
+
+void set_connected_channels(int ch) 
+{
+    for (int c = 1;c<3;c++){
+        if ((ch & c) == 0)
+        {  // before we disable the channel, turn off the backlight
+            day(0,c);
+        }
+    }
+    
+    connectedChannels = ch;
+    set_pwm(pwm); // enable any new channels and adj max PWM
+}
 
 float get_daymode()
 {
@@ -35,8 +52,15 @@ float set_pwm(float new)
     uint8_t pwmAddr;
     if (dayMode)
     {
-        if (new > 0.8)
+        if ((connectedChannels == 0x03) && (new > 0.8))
+        {  // only drive 2 channels up to 80% pwm
             new = 0.8;
+        }
+        else if (new > 1.0)
+        { // single channels can go to 100%
+            new = 1.0;
+        }
+
         pwmAddr = ADDR_LED_DAY;
     }
     else
@@ -68,7 +92,7 @@ int led_init_all()
 {
     connectedChannels = 0;
 
-    for (int ch=1;ch<3;ch++) // CHANGE to 1 - 2 when we have the full test board
+    for (int ch=1;ch<3;ch++) 
     {
         if ((qScan(ch,ADDR_LED_DAY)== ADDR_LED_DAY)  && (qScan(ch,ADDR_LED_NIGHT)== ADDR_LED_NIGHT))
         {
@@ -148,10 +172,18 @@ float read_temperature(int rail, int ch)
         uint8_t buf[2];
         uint16_t value; 
         float volt,temp;
-        i2c_reg_read(ch,(rail==RAIL1)?ADDR_THM1:ADDR_THM2,THERM_VOLTAGE_REG,buf,2);
-        value = ((buf[0] << 4) & 0xf0) + ((buf[1] >> 4) & 0x0f);
+        const int samples = 60;
+        uint32_t total = 0;
+        for (int i=0;i<samples;i++)
+        {
+            i2c_reg_read(ch,(rail==RAIL1)?ADDR_THM1:ADDR_THM2,THERM_VOLTAGE_REG,buf,2);
+            value = ((buf[0] << 4) & 0xf0) + ((buf[1] >> 4) & 0x0f);
+            sleep_us(5);
+            total += value;
+        }
+
         //printf("channel %d Thermistor %d register = 0x%x 0x%x (%d) \n",ch,rail,buf[0],buf[1],value); 
-        volt = 0.006445 + (value * 0.01279); 
+        volt = 0.006445 + (((float)total/samples) * 0.01279); 
         //printf("Thermistor voltage = %2.2fV\n",volt);
         temp = -17.117*powintf(volt,5) + 136.43*powintf(volt,4) - 422.64* powintf(volt,3) + 637.92*powintf(volt,2) - 519.45*volt + 276.24;
         //printf("Thermistor Temp = %f degC",temp);

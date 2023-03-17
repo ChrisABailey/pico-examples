@@ -16,7 +16,9 @@ int bit_init_all()
             i2c_channels |= ch;
         }
     }
+    return i2c_channels;
 }
+
 void print_bit(uint8_t result)
 {
     if (result == 0xFF)

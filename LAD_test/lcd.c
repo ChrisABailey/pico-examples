@@ -76,10 +76,9 @@ void lcd_init_all()
     uart_init(uart1, LCD_BAUD);
     gpio_set_function(LCD_RX_CH1_PIN, GPIO_FUNC_UART);
     gpio_set_function(LCD_RX_CH2_PIN, GPIO_FUNC_UART);
-    int actual = uart_set_baudrate(uart0, LCD_BAUD);
-    int actual2 = uart_set_baudrate(uart1, LCD_BAUD);
-    printf("Uart0 baud set to %d (desired=%d)\r\n",actual,LCD_BAUD);
-    printf("Uart1 baud set to %d (desired=%d)\r\n",actual2,LCD_BAUD);
+    uart_set_baudrate(uart0, LCD_BAUD);
+    uart_set_baudrate(uart1, LCD_BAUD);
+
     // Set UART flow control CTS/RTS, we don't want these, so turn them off
     uart_set_hw_flow(uart0, false, false);
     uart_set_hw_flow(uart1, false, false);
@@ -130,16 +129,16 @@ LCD_BIT_t* parseStatus(int ch, uint8_t *lastPacket, int len)
                     BIT->elapsedTime.hours = eTimeSec / 3600;
                     BIT->elapsedTime.mins = (eTimeSec%3600) / 60;
                     BIT->elapsedTime.secs = eTimeSec %60;
-                    //BIT->elapsedTime.hours = lastPacket[cur+3] + (lastPacket[cur+4]<<8);
-                    //BIT->elapsedTime.mins = lastPacket[cur+2];
-                    //BIT->elapsedTime.secs = lastPacket[cur+1];
-                    //printf("eTime (%d sec),%d:%d:%d\r\n",eTimeSec,BIT->elapsedTime.hours,BIT->elapsedTime.mins,BIT->elapsedTime.secs);
                     break;
                 }
                 case TEMPERATURE_CMD: // temperature
                 {
                     uint16_t hbit = lastPacket[cur+2];
                     int16_t temp = lastPacket[cur+1] + (hbit<<8);
+                    // BIT->temperature = (float)temp / 16.0f;
+                    if (temp & 0x800){
+                        temp = temp | 0xf000;
+                    }
                     BIT->temperature = (float)temp / 16.0f;
                     //printf("pkt[0x%x][0x%x],temp=0x%x,final=%f\r\n",lastPacket[cur+1],lastPacket[cur+2],temp,BIT->temperature);
                     break;
@@ -241,7 +240,7 @@ LCD_BIT_t* parseStatus(int ch, uint8_t *lastPacket, int len)
                     break;
                 default:
                 {
-                    printf(" unhandled Command = [0x%x] \r\n",cmd);
+                    //printf(" unhandled Command = [0x%x] \r\n",cmd);
                 }
             }
             cur+=5;
@@ -304,7 +303,7 @@ bool read_LCD_status(int ch) {
     currTime=startTime;
 
     //read full status data or timeout after one frame sec
-    while (i<STATUS_LEN-9 && ((currTime - startTime) < (4500))) //
+    while (i<STATUS_LEN-7 && ((currTime - startTime) < (4500))) //
     {
         // the first status command is always 0xFF00 (elapsed time)
 

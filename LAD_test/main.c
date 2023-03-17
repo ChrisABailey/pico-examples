@@ -97,9 +97,10 @@ bool lcd_status_timer_callback(struct repeating_timer *t) {
     // this should take less than 1 frame and typically < 3.5mS
     if (read_LCD_status(ch))
     {
-        // read a complete packet so next time read the other channel
-        ch = (ch==CH1)?CH2:CH1;
     }
+    // read a complete packet so next time read the other channel
+    ch = (ch==CH1)?CH2:CH1;
+
     critical_section_exit (&critsec);
     gpio_put(LED_PIN, (ch==CH1));
 
@@ -142,6 +143,7 @@ void initialize()
 void printStatus()
 {   
     printf("=======Board Status======\r\n");
+    printf("PWM percentage    = %2.2f\r\n",get_pwm()*100);
     printf("BIT_CH1 Discrete  = %s\r\n",gpio_get(BIT_CH1_PIN)?"OK":"FAIL");
     printf("BIT_CH2 Discret   = %s\r\n",gpio_get(BIT_CH2_PIN)?"OK":"FAIL");
     printf("TEMP_OK_CH1       = %s\r\n",gpio_get(TEMP_OK_CH1_PIN)?"OK":"FAIL");
@@ -234,6 +236,17 @@ int handleMenuKey(char key,bool echo)
             if (newValue >= 0.0f && newValue <= 3000.0f)
             {
                 printf("\r\nPWM = %2.2f \r\n",set_pwm(newValue/3000.0f)*100);
+                //printf("Set successful\r\n");
+            }
+            break;
+        }
+        case 'm': {
+            printf("enable channels (01,02,03(both)) currently (%02d):", get_connected_channels());
+            int newValue = getInt(echo);
+            if (newValue >= 1 && newValue <= 3)
+            {
+
+                set_connected_channels(newValue);
                 //printf("Set successful\r\n");
             }
             break;
@@ -333,6 +346,8 @@ int main() {
     add_repeating_timer_ms(14, lcd_status_timer_callback, NULL, &statusTimer);
     //gpio_set_irq_enabled_with_callback(2, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
 
+    prompt(echo);
+    
     while(true)
     {
         int key = getchar_timeout_us(16);
