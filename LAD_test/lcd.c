@@ -94,6 +94,40 @@ void lcd_init_all()
     init_BIT_struct(CH2);
 }
 
+uint8_t get_fpga_ver(int ch) 
+{ 
+    LCD_BIT_t *BIT;
+    if (ch == CH1)
+    {
+        BIT = &last_LCD_BIT_CH1;
+    }
+    else
+    {
+        BIT = &last_LCD_BIT_CH2;
+    }
+    if (BIT->failedReads > 20) 
+        return 0;
+    return BIT->fpga;
+}
+
+float get_lcd_temp(int ch) 
+{ 
+    LCD_BIT_t *BIT;
+    if (ch == CH1)
+    {
+        BIT = &last_LCD_BIT_CH1;
+    }
+    else
+    {
+        BIT = &last_LCD_BIT_CH2;
+    }
+    if (BIT->failedReads > 20) 
+        return -99.0f;
+    return BIT->temperature;
+}
+
+
+
 //The FPGA returns a series of 6 byte commands, each starts with 0xFF followed by a command ID and 4 bytes of data.
 LCD_BIT_t* parseStatus(int ch, uint8_t *lastPacket, int len)
 {
@@ -124,11 +158,11 @@ LCD_BIT_t* parseStatus(int ch, uint8_t *lastPacket, int len)
                     b2 = lastPacket[cur+2];
                     b3 = lastPacket[cur+3];
                     b4 = lastPacket[cur+4];
-                    uint32_t eTimeSec = (lastPacket[cur+1] + (b2<<8) + (b3<<16))+(b4<<24);
+                    uint32_t eTimeSec = (lastPacket[cur+1] + (b2*256) + (b3*65536))+(b4*1677216);
                     eTimeSec = eTimeSec/4; // indicator counts in 1/4 sec increments
-                    BIT->elapsedTime.hours = eTimeSec / 3600;
-                    BIT->elapsedTime.mins = (eTimeSec%3600) / 60;
-                    BIT->elapsedTime.secs = eTimeSec %60;
+                    BIT->elapsedTime.hours = eTimeSec / 3600U;
+                    BIT->elapsedTime.mins = (eTimeSec%3600U) / 60U;
+                    BIT->elapsedTime.secs = eTimeSec %60U;
                     break;
                 }
                 case TEMPERATURE_CMD: // temperature
@@ -136,7 +170,7 @@ LCD_BIT_t* parseStatus(int ch, uint8_t *lastPacket, int len)
                     uint16_t hbit = lastPacket[cur+2];
                     int16_t temp = lastPacket[cur+1] + (hbit<<8);
                     // BIT->temperature = (float)temp / 16.0f;
-                    if (temp & 0x800){
+                    if (temp & 0x0800){
                         temp = temp | 0xf000;
                     }
                     BIT->temperature = (float)temp / 16.0f;

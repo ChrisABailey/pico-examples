@@ -23,18 +23,18 @@ void print_bit(uint8_t result)
 {
     if (result == 0xFF)
     {
-        printf("OK");
+        printf(" OK ");
         return;
     }
     printf("|");
     if ((result & 0x01) == 0)
-        printf(" LED_N fault |");
+        printf("LED_N fault |");
     if ((result & 0x02) == 0)
-        printf(" LED_D fault |");
+        printf("LED_D fault |");
     if ((result & 0x04) == 0)
-        printf(" 3.3V fault |");
+        printf("3.3V fault |");
     if ((result & 0x08) == 0)
-        printf(" 5V fault |");
+        printf("5V fault |");
     if ((result & 0xF0) != 0xF0)
         printf("Unexpected BIT encoding 0x%2x |",result);
 }

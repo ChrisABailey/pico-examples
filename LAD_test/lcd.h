@@ -52,9 +52,11 @@ extern LCD_BIT_t last_LCD_BIT_CH2;
 
 void lcd_init_all();
 void print_status(LCD_BIT_t* BIT);
+uint8_t get_fpga_ver(int ch); 
+float get_lcd_temp(int ch);         
 
-// reads the serial port associated with ch
-// returns false if we need to read more data, true if we are complete
+/// @brief reads the serial port associated with ch
+/// @returns false if we need to read more data, true if we are complete
 bool read_LCD_status(int ch);
 
 #ifdef __cplusplus

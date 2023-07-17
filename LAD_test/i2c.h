@@ -26,6 +26,11 @@ int i2c_reg_read(int channel,
                 uint8_t *buf,
                 const uint8_t nbytes);
 
+int i2c_reg_read16(  int channel,
+                const uint addr,
+                const uint16_t reg,
+                uint8_t *buf,
+                const uint8_t nbytes);
 #ifdef __cplusplus
  }
 #endif

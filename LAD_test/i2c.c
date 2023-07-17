@@ -150,3 +150,43 @@ int i2c_reg_read(  int channel,
 
     return num_bytes_read;
 }
+
+// Read byte(s) from specified 16bit register. If nbytes > 1, read from consecutive
+// registers.
+int i2c_reg_read16(  int channel,
+                const uint addr,
+                const uint16_t reg,
+                uint8_t *buf,
+                const uint8_t nbytes) {
+
+    int num_bytes_read = 0;
+    uint8_t reg2[2];
+    reg2[0] = reg>>8;
+    reg2[1] = reg&0x00FF;
+
+    // Check to make sure caller is asking for 1 or more bytes
+    if (nbytes < 1) {
+        return 0;
+    }
+
+    // we get an error if the read status interupt occurs mid write/read
+    // this makes sure they dont conflict
+    critical_section_enter_blocking (&critsec);
+
+    // Read data from register(s) over I2C
+    int rc = i2c_write_timeout_us((channel==CH1)? i2c0:i2c1, addr, reg2, 2, true,16000);
+    if (rc == PICO_ERROR_GENERIC || rc == PICO_ERROR_TIMEOUT)
+    {
+        printf ("Error reading from I2C CH%d, ADDR=0x%x, Reg=0x%x\r\n",channel,addr,reg);
+        return 0;
+    }
+    
+    num_bytes_read = i2c_read_blocking((channel==CH1)? i2c0:i2c1, addr, buf, nbytes, false);
+    critical_section_exit (&critsec);
+    if (num_bytes_read == PICO_ERROR_GENERIC)
+    {
+        printf("Error reading CH%d Addr(0x%x) Reg(5x%x)",channel,addr,reg);
+    }
+
+    return num_bytes_read;
+}

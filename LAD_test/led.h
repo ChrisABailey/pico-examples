@@ -5,6 +5,22 @@
  extern "C" {
 #endif
 
+#define FAULT_DAY_INPUT_POWER   0x01U
+#define FAULT_DAY_OTHER_POWER     0x02U
+#define FAULT_DAY_BOOST_THERMAL 0x04U
+#define FAULT_DAY_BOOST_OVP     0x08U
+#define FAULT_DAY_BOOST_OTHER   0x10U
+#define FAULT_DAY_LED_OPEN      0x20U
+#define FAULT_DAY_LED_SHORT     0x40U
+#define FAULT_DAY_LED_OTHER     0X80U
+#define FAULT_NIGHT_INPUT_POWER   0x0100U
+#define FAULT_NIGHT_OTHER_POWER     0x0200U
+#define FAULT_NIGHT_BOOST_THERMAL 0x0400U
+#define FAULT_NIGHT_BOOST_OVP     0x0800U
+#define FAULT_NIGHT_BOOST_OTHER   0x1000U
+#define FAULT_NIGHT_LED_OPEN      0x2000U
+#define FAULT_NIGHT_LED_SHORT     0x4000U
+#define FAULT_NIGHT_LED_OTHER     0X8000U
 
 // Set up backlight on CH1
 // Return bit array of led channels successfully found (CH1 | CH2)
@@ -29,7 +45,7 @@ float night(float pwm_percent,int ch);
 /// @return Current value 0 to 4095
 uint16_t read_current(int ch);
 
-/// @brief get the lacklight pwm duty cycle 
+/// @brief get the backlight pwm duty cycle 
 /// @return percent of duty cycle (0 to 1.0)
 float get_pwm();
 
@@ -47,6 +63,9 @@ float read_temperature(int rail, int ch);
 
 int get_connected_channels();
 void set_connected_channels(int ch);
+
+uint16_t read_led_bit(int ch);
+void print_led_bit(uint16_t result);
 
 #ifdef __cplusplus
  }

@@ -5,6 +5,9 @@
 #define BIT_CH1_PIN         10
 #define BIT_CH2_PIN         22
 
+#define TOUCH_CH1_PIN       17
+#define TOUCH_CH2_PIN       19
+
 #define TEMP_OK_CH1_PIN     11
 #define TEMP_OK_CH2_PIN     14
 
@@ -48,6 +51,8 @@
 #define ADDR_THM1 0X50
 #define ADDR_THM2 0X55
 #define ADDR_BIT  0x70
+#define ADDR_TOUCH_B 0x0b
+#define ADDR_TOUCH_A 0x0a
 
 #define CH1 1 // Connection to Driver Board 1
 #define CH2 2 // Connection to Driver Board 2

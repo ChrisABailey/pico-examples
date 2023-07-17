@@ -14,10 +14,36 @@ int connectedChannels=0;
 
 #define PWM_REG 0x00
 #define CURRENT_REG 0x02
+#define SUPPLY_REG 0x0E // SUPLY_STATUS (supply voltage info)
+#define BOOST_REG 0x10  // Reg with BOOST_STATUS (boost circuit info)
+#define LED_REG   0x12  // reg weith LED_STATUS (led info)
 #define THERM_VOLTAGE_REG 0x00
-const uint16_t INIT_VAL = 0XFFFF;
-const uint16_t OFF_VAL = 0X0000; 
-const uint16_t SLOPE_VAL = 0X030A;
+
+#define SUPPLY_VIN_OVER_CURRENT  0x80U
+#define SUPPLY_VDD_UNDER_VOLTAGE  0x20U
+#define SUPPLY_VIN_OVER_VOLTAGE  0x08U
+#define SUPPLY_VIN_UNDER_VOLTAGE 0x02U
+#define SUPPLY_OTHER             0xFF00U 
+#define BOOST_OVP_LOW 0x02U
+#define BOOST_OVP_HIGH 0x08U
+#define BOOST_OVER_CURRENT 0x20U
+#define BOOST_THERMAL_SHUTDOWN 0x80U
+#define BOOST_OTHER 0xFF00U
+#define LED_STATUS 0x400U
+#define LED_SHORT_GND 0x100U
+#define LED_OPEN   0x40U
+#define LED_SHORT  0x80U
+#define LED_FAULT1 0x01U
+#define LED_FAULT2 0x02U
+#define LED_FAULT3 0x04U
+#define LED_FAULT4 0x08U
+#define LED_OTHER  0x7800U
+uint8_t INIT_VAL[] = {0XFF,0xFF};  // Clear the supply_status or boost_status regs
+uint8_t LED_INIT_VAL[] = {0xFE,0x00}; // Clears LED_STATUS Reg
+uint8_t OFF_VAL[] = {0X00,0x00}; 
+uint8_t SLOPE_VAL[] = {0X03, 0x0A};
+
+
 
 int get_connected_channels() 
 {
@@ -47,6 +73,8 @@ float get_pwm()
     return pwm/65535.0f;
 }
 
+/// @brief Set the Backlight PWM Percentage (0:1.0)
+/// @return new PWM percentage
 float set_pwm(float new)
 {
     uint8_t pwmAddr;
@@ -98,19 +126,20 @@ int led_init_all()
         {
             connectedChannels |= ch;
             // THese Init values reset bit values that need to be cleared after power on.
-            i2c_reg_write(ch,ADDR_LED_DAY,0X0E,(uint8_t *)&INIT_VAL,2);
-            i2c_reg_write(ch,ADDR_LED_DAY,0X10,(uint8_t *)&INIT_VAL,2);
-            //i2c_reg_write(ch,ADDR_LED_DAY,0X12,(uint8_t *)&INIT_VAL,2);
-            i2c_reg_write(ch,ADDR_LED_NIGHT,0X0E,(uint8_t *)&INIT_VAL,2);
-            i2c_reg_write(ch,ADDR_LED_NIGHT,0X10,(uint8_t *)&INIT_VAL,2);
-            //i2c_reg_write(ch,ADDR_LED_NIGHT,0X12,(uint8_t *)&INIT_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_DAY,SUPPLY_REG,INIT_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_DAY,BOOST_REG,INIT_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_DAY,LED_REG,LED_INIT_VAL,2);
+
+            i2c_reg_write(ch,ADDR_LED_NIGHT,SUPPLY_REG,INIT_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_NIGHT,BOOST_REG,INIT_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_NIGHT,LED_REG,LED_INIT_VAL,2);
 
             // turn off the leds
-            i2c_reg_write(ch,ADDR_LED_DAY,PWM_REG,(uint8_t *)&OFF_VAL,2);
-            i2c_reg_write(ch,ADDR_LED_NIGHT,PWM_REG,(uint8_t *)&OFF_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_DAY,PWM_REG,OFF_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_NIGHT,PWM_REG,OFF_VAL,2);
             // configure slope function
-            i2c_reg_write(ch,ADDR_LED_DAY,0X04,(uint8_t *)&SLOPE_VAL,2);
-            i2c_reg_write(ch,ADDR_LED_NIGHT,0X04,(uint8_t *)&SLOPE_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_DAY,0X04,SLOPE_VAL,2);
+            i2c_reg_write(ch,ADDR_LED_NIGHT,0X04,SLOPE_VAL,2);
         }
         
     }
@@ -165,6 +194,96 @@ uint16_t read_current(int ch)
     return 0;
 }
 
+/// @brief Reads the LED Driver ICs status
+/// @param ch (CH1 | CH2)
+/// @return 16 bit status register
+uint16_t read_led_bit(int ch)
+{
+    if (ch & connectedChannels)
+    {
+        uint16_t value; 
+        uint16_t errors = 0;
+        i2c_reg_read(ch,ADDR_LED_DAY,SUPPLY_REG,(uint8_t *)&value,2);
+        errors |= (value & SUPPLY_VIN_OVER_CURRENT )?FAULT_DAY_INPUT_POWER:0;
+        errors |= (value & SUPPLY_VIN_OVER_VOLTAGE)?FAULT_DAY_INPUT_POWER:0;
+        errors |= (value & SUPPLY_VIN_UNDER_VOLTAGE)?FAULT_DAY_INPUT_POWER:0;        
+        errors |= (value & (SUPPLY_VDD_UNDER_VOLTAGE | SUPPLY_OTHER))?FAULT_DAY_OTHER_POWER:0;
+        
+        i2c_reg_read(ch,ADDR_LED_DAY,BOOST_REG,(uint8_t *)&value,2);
+        errors |= (value & BOOST_THERMAL_SHUTDOWN)?FAULT_DAY_BOOST_THERMAL:0;
+        errors |= (value & (BOOST_OVP_LOW|BOOST_OVP_HIGH))?FAULT_DAY_BOOST_OVP    :0;
+        errors |= (value & (BOOST_OTHER|BOOST_OVER_CURRENT))?FAULT_DAY_BOOST_OTHER  :0;
+        
+        i2c_reg_read(ch,ADDR_LED_DAY,LED_REG,(uint8_t *)&value,2);
+        errors |= (value & (LED_OPEN))?FAULT_DAY_LED_OPEN     :0;
+        errors |= (value & (LED_SHORT|LED_SHORT_GND))?FAULT_DAY_LED_SHORT    :0;
+        errors |= (value & (LED_OTHER | LED_FAULT1 | LED_FAULT2 |LED_FAULT3 |LED_FAULT4 | LED_STATUS))?FAULT_DAY_LED_OTHER:0;
+
+        i2c_reg_read(ch,ADDR_LED_NIGHT,SUPPLY_REG,(uint8_t *)&value,2);
+        errors |= (value & SUPPLY_VIN_OVER_CURRENT )?FAULT_NIGHT_INPUT_POWER:0;
+        errors |= (value & SUPPLY_VIN_OVER_VOLTAGE)?FAULT_NIGHT_INPUT_POWER:0;
+        errors |= (value & SUPPLY_VIN_UNDER_VOLTAGE)?FAULT_NIGHT_INPUT_POWER:0;        
+        errors |= (value & (SUPPLY_VDD_UNDER_VOLTAGE | SUPPLY_OTHER))?FAULT_NIGHT_OTHER_POWER:0;
+        
+        i2c_reg_read(ch,ADDR_LED_NIGHT,BOOST_REG,(uint8_t *)&value,2);
+        errors |= (value & BOOST_THERMAL_SHUTDOWN)?FAULT_NIGHT_BOOST_THERMAL:0;
+        errors |= (value & (BOOST_OVP_LOW|BOOST_OVP_HIGH))?FAULT_NIGHT_BOOST_OVP    :0;
+        errors |= (value & (BOOST_OTHER|BOOST_OVER_CURRENT))?FAULT_NIGHT_BOOST_OTHER  :0;
+        
+        i2c_reg_read(ch,ADDR_LED_NIGHT,LED_REG,(uint8_t *)&value,2);
+        errors |= (value & (LED_OPEN))?FAULT_NIGHT_LED_OPEN     :0;
+        errors |= (value & (LED_SHORT|LED_SHORT_GND))?FAULT_NIGHT_LED_SHORT    :0;
+        errors |= (value & (LED_OTHER | LED_FAULT1 | LED_FAULT2 |LED_FAULT3 |LED_FAULT4 | LED_STATUS))?FAULT_NIGHT_LED_OTHER:0;
+
+        return errors;
+    }
+    return 0;
+}
+
+/// @brief print a human redable summary of the 16bit LED driver Status 
+/// @param result Driver IC status (returnd from read_led_bit())
+void print_led_bit(uint16_t result)
+{
+    if (result & FAULT_DAY_INPUT_POWER)
+        printf("FAULT_DAY_INPUT_POWER   \r\n");
+    if (result & FAULT_DAY_OTHER_POWER)
+        printf("FAULT_DAY_OTHER_POWER   \r\n");
+    if (result & FAULT_DAY_BOOST_THERMAL)
+        printf("FAULT_DAY_BOOST_THERMAL \r\n");
+    if (result & FAULT_DAY_BOOST_OVP)
+        printf("FAULT_DAY_BOOST_OVP     \r\n");
+    if (result & FAULT_DAY_BOOST_OTHER)
+        printf("FAULT_DAY_BOOST_OTHER   \r\n");
+    if (result & FAULT_DAY_LED_OPEN)
+        printf("FAULT_DAY_LED_OPEN      \r\n");
+    if (result & FAULT_DAY_LED_SHORT)
+        printf("FAULT_DAY_LED_SHORT     \r\n");
+    if (result & FAULT_DAY_LED_OTHER)
+        printf("FAULT_DAY_LED_OTHER     \r\n");
+    if (result & FAULT_NIGHT_INPUT_POWER)
+        printf("FAULT_NIGHT_INPUT_POWER \r\n");
+    if (result & FAULT_NIGHT_OTHER_POWER)
+        printf("FAULT_NIGHT_OTHER_POWER \r\n");
+    if (result & FAULT_NIGHT_BOOST_THERMAL)
+        printf("FAULT_NIGHT_BOOST_THERMAL\r\n");
+    if (result & FAULT_NIGHT_BOOST_OVP)
+        printf("FAULT_NIGHT_BOOST_OVP   \r\n");
+    if (result & FAULT_NIGHT_BOOST_OTHER)
+        printf("FAULT_NIGHT_BOOST_OTHER \r\n");
+    if (result & FAULT_NIGHT_LED_OPEN)
+        printf("FAULT_NIGHT_LED_OPEN    \r\n");
+    if (result & FAULT_NIGHT_LED_SHORT)
+        printf("FAULT_NIGHT_LED_SHORT   \r\n");
+    if (result & FAULT_NIGHT_LED_OTHER)
+        printf("FAULT_NIGHT_LED_OTHER   \r\n");
+    if (result == 0)
+        printf(" OK ");
+}
+
+/// @brief Read the LED rail temperature 
+/// @param rail 0 or 1
+/// @param ch (CH1 | CH2)
+/// @return temperature in Deg C
 float read_temperature(int rail, int ch)
 {
     if (ch & connectedChannels)

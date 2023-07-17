@@ -4,6 +4,7 @@ add_executable(LAD_test
         led.c
         bit.c
         lcd.c
+        touch.c
         )
 
 # pull in common dependencies and additional i2c hardware support
