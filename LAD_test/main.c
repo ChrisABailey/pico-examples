@@ -12,22 +12,25 @@
 #include "led.h"
 #include "bit.h"
 #include "lcd.h"
+#include "touch.h"
 
 //a random comment
 critical_section_t critsec;
 
 const char promptString[] = "\r\nMAIN COM (?= help menu): ";
-const char menu[] = "\r\n20x8 Test Board\r\n"
+const char menu[] = "\r\n20x8 DHA Tester:\r\n"
                        "\tI - Initialize the DHA\r\n"
-                       "\tB - DHA Controller Board BIT\r\n"
-                       "\tL - LCD Status\r\n"
-                       "\tS - DHA Controller Board Status \r\n"
+                       "\tB - Read DHA Controller Board BIT\r\n"
+                       "\tL - Read LCD Status\r\n"
+                       "\tS - Read DHA Controller Board Status \r\n"
+                       "\tF - Get Next Touch Response...\r\n"
+                       "\tW - Get Next Touch Swipe Response...\r\n"
                        "\tpxxxx (xxxx=0 to 3000) - Backlight PWM\r\n"                       
+                       "\tT - Read Backlight Temperature\r\n"
+                       "\tC - Read LED Default Current\r\n"
                        "\tD -  Day Mode \r\n"
-                       "\tN -  Night Mode\r\n"
-                       "\tT - Backlight Temperature\r\n"
-                       "\tC - LED Max Current\r\n"
-                       "\t+/- Rais/Lower Backlight by 10%%\r\n";
+                       "\tN -  Night Mode\r\n"                       
+                       "\t+/- Raise/Lower Backlight by 10%%\r\n";
                        
 
 const char BACKSPACE = 127;
@@ -95,12 +98,9 @@ bool lcd_status_timer_callback(struct repeating_timer *t) {
 
     critical_section_enter_blocking (&critsec);
     // this should take less than 1 frame and typically < 3.5mS
-    if (read_LCD_status(ch))
-    {
-    }
-    // read a complete packet so next time read the other channel
+    read_LCD_status(ch);
+    // next time read the other channel
     ch = (ch==CH1)?CH2:CH1;
-
     critical_section_exit (&critsec);
     gpio_put(LED_PIN, (ch==CH1));
 
@@ -110,54 +110,79 @@ bool lcd_status_timer_callback(struct repeating_timer *t) {
 void initialize()
 {
     i2c_init_all();
-    printf("i2c up\r\n");
+    printf("I2C Working \r\n");
     int chs = led_init_all();
     if (chs == CH1)
     {
-        printf("LED CH1 up\r\n");
+        printf("LED CH1 Responding\r\n");
     }
     else if (chs == CH2)
     {
-        printf("LED CH2 up\r\n");
+        printf("LED CH2 Responding\r\n");
     }
     else if (chs == (CH1|CH2))
     {
-        printf("LED CH1 & CH2 up\r\n");
+        printf("LED CH1 & CH2 Responding\r\n");
     }
     else
     {
-        printf("Failed to contact LED controllers\r\n");
-    }    
+        printf("Error, No LED controllers responded\r\n");
+    }
+
     lcd_init_all();
-    printf("LCD up\r\n");
 
     chs = bit_init_all();
 
-    printf("BIT Channel 1 %s, BIT Channel 2 %s \r\n",(chs & CH1)? "Up":"not found",(chs & CH2)? "Up":"not found");
+    printf("BIT Channel 1 %s, BIT Channel 2 %s \r\n",(chs & CH1)? "Responding":"Not Found",(chs & CH2)? "Responding":"Not Found");
 
-    day(0.25,CH1);
-    day(0.25,CH2);
+    chs = touch_init_all();
+    if (chs & CH1)
+    {
+        uint32_t rc = read_touch_fw_version(CH1);
+        printf("Touch CH1 Firmware Ver: %x.%x.%x\r\n",(rc >> 16),(rc&0xFF00)>>8,(rc & 0x0FF));
+    }
+    if (chs & CH2)
+    {
+        uint32_t rc = read_touch_fw_version(CH2);
+        printf("Touch CH2 Firmware Ver: %x.%x.%x\r\n",(rc >> 16),(rc&0xFF00)>>8,(rc & 0x0FF));
+    }
+    if(chs== 0)
+    {
+        printf("No Touch Controller Found\r\n");
+    }
+    day(0.33,CH1);
+    day(0.33,CH2);
 
 }
 
+
+
 void printStatus()
 {   
-    printf("=======Board Status======\r\n");
-    printf("PWM percentage    = %2.2f\r\n",get_pwm()*100);
-    printf("BIT_CH1 Discrete  = %s\r\n",gpio_get(BIT_CH1_PIN)?"OK":"FAIL");
-    printf("BIT_CH2 Discret   = %s\r\n",gpio_get(BIT_CH2_PIN)?"OK":"FAIL");
-    printf("TEMP_OK_CH1       = %s\r\n",gpio_get(TEMP_OK_CH1_PIN)?"OK":"FAIL");
-    printf("TEMP_OK_CH2       = %s\r\n",gpio_get(TEMP_OK_CH2_PIN)?"OK":"FAIL");
-    printf("LCD_ALARM_CH1     = %s\r\n",gpio_get(LCD_ALARM_CH1_PIN)?"OK":"FAIL");
-    printf("LCD_ALARM_CH2     = %s\r\n",gpio_get(LCD_ALARM_CH2_PIN)?"OK":"FAIL");
-    printf("PD_CH1_PIN        = %s\r\n",gpio_get(PD_CH1_PIN)?"OK":"Disabled");
-    printf("PD_CH2_PIN        = %s\r\n",gpio_get(PD_CH2_PIN)?"OK":"Disabled");
-
-    printf("\r\nChannel 1 Controler Board BIT Register:");
+    printf("┌─────Board Status─┬──────┐\r\n");
+    printf("│PWM percentage    │%5.2f%%│\r\n",get_pwm()*100);
+    printf("│BIT_CH1 Discrete  │ %s │\r\n",gpio_get(BIT_CH1_PIN)?" OK ":"FAIL");
+    printf("│BIT_CH2 Discret   │ %s │\r\n",gpio_get(BIT_CH2_PIN)?" OK ":"FAIL");
+    printf("│TEMP_OK_CH1       │ %s │\r\n",gpio_get(TEMP_OK_CH1_PIN)?" OK ":"FAIL");
+    printf("│TEMP_OK_CH2       │ %s │\r\n",gpio_get(TEMP_OK_CH2_PIN)?" OK ":"FAIL");
+    printf("│LCD_ALARM_CH1     │ %s │\r\n",gpio_get(LCD_ALARM_CH1_PIN)?" OK ":"FAIL");
+    printf("│LCD_ALARM_CH2     │ %s │\r\n",gpio_get(LCD_ALARM_CH2_PIN)?" OK ":"FAIL");
+    printf("│CH1 Display Enable│ %s │\r\n",gpio_get(PD_CH1_PIN)?" ON ":"OFF ");
+    printf("│CH2 Display Enable│ %s │\r\n",gpio_get(PD_CH2_PIN)?" ON ":"OFF ");
+    printf("│                  │      │\r\n");
+    printf("│CH1 BIT Register: │ ");
     print_bit(read_bit(CH1));
-    printf("\r\nChannel 2 Controler Board BIT Register:");
+    printf(" │\r\n");
+    printf("│CH1 LED IC Status:│ ");
+    print_led_bit(read_led_bit(CH1));
+    printf(" │\r\n");
+    printf("│CH2 BIT Register: │ ");
     print_bit(read_bit(CH2));
-    printf("\r\n=========================\r\n");
+    printf(" │\r\n");
+    printf("│CH2 LED IC Status:│ ");
+    print_led_bit(read_led_bit(CH2));
+    printf(" │\r\n");
+    printf("└──────────────────┴──────┘\r\n");
 }
 
 
@@ -208,6 +233,42 @@ int handleMenuKey(char key,bool echo)
             day(0.3,CH2);
             break;
         }
+        case 'f':
+        {
+            uint8_t touchResult[TOUCH_RESP_LEN];
+            uint8_t rc;
+
+            printf("\r\nWaiting 5Sec for Touch...\r\n");
+
+            printf(" CH1:\r\n");
+            if ( (rc = read_next_touch(touchResult,CH1))==0)
+            {
+                print_touch(touchResult);
+            }
+            else if (rc==1)
+            {
+                printf("No Touch Signal Received (Timed Out)\r\n");
+            }
+            else
+            {
+                printf("Unrecognised Touch Response\r\n");
+            }
+
+            printf(" CH2:\r\n");
+            if ( (rc = read_next_touch(touchResult,CH2))==0)
+            {
+                print_touch(touchResult);
+            }
+            else if (rc==1)
+            {
+                printf("No Touch Signal Received (Timed Out)\r\n");
+            }
+            else
+            {
+                printf("Unrecognised Touch Response\r\n");
+            }
+            break;
+        }
         case 'n':
         {
             night(0.3,CH1);
@@ -241,7 +302,7 @@ int handleMenuKey(char key,bool echo)
             break;
         }
         case 'm': {
-            printf("enable channels (01,02,03(both)) currently (%02d):", get_connected_channels());
+            printf("Enable channels (01,02,03(both)) currently (%02d):", get_connected_channels());
             int newValue = getInt(echo);
             if (newValue >= 1 && newValue <= 3)
             {
@@ -275,6 +336,32 @@ int handleMenuKey(char key,bool echo)
             }
             break;
         }
+        case 'w':
+        {
+            uint8_t touchResult[TOUCH_RESP_LEN];
+            //const char *dir[] = {"No Swipe","Up","Down","Left","Right"};
+
+            printf("\r\nWaiting 5Sec for Swipe...\r\n");
+
+            
+            uint8_t rc = read_next_gesture(touchResult,CH1);
+            if (rc==0) 
+                printf("CH1: No Gesture seen\r\n");
+            else
+            {
+                printf(" CH1 Swipe:\r\n");
+                print_touch(touchResult);
+            }
+            rc = read_next_gesture(touchResult,CH2);
+            if (rc==0) 
+                printf("CH2: No Gesture seen\r\n");
+            else
+            {
+                printf(" CH2 Swipe:\r\n");
+                print_touch(touchResult);
+            }
+            break;
+        }        
         case '+': // Increase PWM by 10%
         {
             float curr = get_pwm();
@@ -319,6 +406,8 @@ int main() {
     gpio_init(LCD_ALARM_CH2_PIN);
     gpio_init(PD_CH1_PIN       );
     gpio_init(PD_CH2_PIN       );
+    gpio_init(TOUCH_CH1_PIN    );
+    gpio_init(TOUCH_CH2_PIN    );
 
     gpio_set_dir(BIT_CH1_PIN      ,GPIO_IN);
     gpio_set_dir(BIT_CH2_PIN      ,GPIO_IN);
@@ -328,6 +417,8 @@ int main() {
     gpio_set_dir(LCD_ALARM_CH2_PIN,GPIO_IN);
     gpio_set_dir(PD_CH1_PIN       ,GPIO_IN);
     gpio_set_dir(PD_CH2_PIN       ,GPIO_IN);
+    gpio_set_dir(TOUCH_CH1_PIN       ,GPIO_IN);
+    gpio_set_dir(TOUCH_CH2_PIN       ,GPIO_IN);
 
     critical_section_init(&critsec);
     stdio_init_all();
