@@ -20,6 +20,7 @@ critical_section_t critsec;
 const char promptString[] = "\r\nMAIN COM (?= help menu): ";
 const char menu[] = "\r\n20x8 DHA Tester:\r\n"
                        "\tI - Initialize the DHA\r\n"
+                       "\tR - Reset Touch (shows FW Ver)\r\n"
                        "\tB - Read DHA Controller Board BIT\r\n"
                        "\tL - Read LCD Status\r\n"
                        "\tS - Read DHA Controller Board Status \r\n"
@@ -28,8 +29,9 @@ const char menu[] = "\r\n20x8 DHA Tester:\r\n"
                        "\tpxxxx (xxxx=0 to 3000) - Backlight PWM\r\n"                       
                        "\tT - Read Backlight Temperature\r\n"
                        "\tC - Read LED Default Current\r\n"
-                       "\tD -  Day Mode \r\n"
-                       "\tN -  Night Mode\r\n"                       
+                       "\tD - Day Mode \r\n"
+                       "\tN - Night Mode\r\n"             
+                       "\tM - Enable/disable Driver Channels\r\n"          
                        "\t+/- Raise/Lower Backlight by 10%%\r\n";
                        
 
@@ -277,9 +279,10 @@ int handleMenuKey(char key,bool echo)
         }
         case 'i':
         {
-            initialize();
+
             i2c_scan(CH1);  
             i2c_scan(CH2);
+            initialize();
 
             break;
         }
@@ -310,6 +313,19 @@ int handleMenuKey(char key,bool echo)
                 set_connected_channels(newValue);
                 //printf("Set successful\r\n");
             }
+            break;
+        }
+        case 'r':
+        {
+            //printf("Resetting Touch..");
+            touch_reset();
+
+            uint32_t rc;
+            rc = read_touch_fw_version(CH1);
+            printf("\r\nTouch CH1 Firmware Ver: %x.%x.%x\r\n",(rc >> 16),(rc&0xFF00)>>8,(rc & 0x0FF));
+            rc = read_touch_fw_version(CH2);
+            printf("Touch CH2 Firmware Ver: %x.%x.%x\r\n",(rc >> 16),(rc&0xFF00)>>8,(rc & 0x0FF));
+
             break;
         }
         case 's':
@@ -408,6 +424,8 @@ int main() {
     gpio_init(PD_CH2_PIN       );
     gpio_init(TOUCH_CH1_PIN    );
     gpio_init(TOUCH_CH2_PIN    );
+    gpio_init(TOUCH_CH1_RESET  );
+    gpio_init(TOUCH_CH2_RESET  );   
 
     gpio_set_dir(BIT_CH1_PIN      ,GPIO_IN);
     gpio_set_dir(BIT_CH2_PIN      ,GPIO_IN);
@@ -419,6 +437,8 @@ int main() {
     gpio_set_dir(PD_CH2_PIN       ,GPIO_IN);
     gpio_set_dir(TOUCH_CH1_PIN       ,GPIO_IN);
     gpio_set_dir(TOUCH_CH2_PIN       ,GPIO_IN);
+    gpio_set_dir(TOUCH_CH1_RESET, GPIO_OUT);
+    gpio_set_dir(TOUCH_CH2_RESET, GPIO_OUT);
 
     critical_section_init(&critsec);
     stdio_init_all();

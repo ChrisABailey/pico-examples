@@ -8,10 +8,32 @@
 int i2c_tchannels = 0;
 uint8_t touch_addr_ch1, touch_addr_ch2;
 
+void touch_reset()
+{
+    if (i2c_tchannels & CH1)
+    {
+        gpio_put(TOUCH_CH1_RESET,0);
+        busy_wait_ms(10);
+        gpio_put(TOUCH_CH1_RESET,1);
+    }
+    if (i2c_tchannels & CH2)
+    {
+        gpio_put(TOUCH_CH2_RESET,0);
+        busy_wait_ms(10);
+        gpio_put(TOUCH_CH2_RESET,1);
+    }
+
+    busy_wait_ms(100);  
+}
+
 int touch_init_all()
 {
 
     i2c_tchannels = 0;
+    gpio_put(TOUCH_CH1_RESET,1);
+    gpio_put(TOUCH_CH2_RESET,1);
+    busy_wait_ms(100);    
+
     for (int i=CH1;i<=CH2;i++)
     {
 
@@ -41,6 +63,7 @@ int touch_init_all()
                 touch_addr_ch2 = ADDR_TOUCH_B;
             }
         }
+        
     }
     return i2c_tchannels;
 }
@@ -71,7 +94,7 @@ int is_gesture(uint8_t *result)
         return 0;
     }   
 
-    if ((result[17]>=63) && (result[17]<=77))
+    if ((result[17]>=0x63) && (result[17]<=0x77))
     {
         return 1;
     }
@@ -172,8 +195,8 @@ void print_touch(uint8_t *result)
         }
     }
     
-    if (result[20] != 0)
-        printf("%x Stuck Touch(s) reported\r\n",result[20]);
+    //if (result[20] != 0)
+    //    printf("%x Stuck Touch(s) reported\r\n",result[20]);
 }
 
 uint8_t read_next_touch(uint8_t *result,int ch)
@@ -210,13 +233,18 @@ uint8_t read_next_gesture(uint8_t *result,int ch)
             if (time_us_32() > startTime+(5*1000000)) // give up after 5 sec
                 return 0;
         }
-        if (0==read_touch(result,ch))
+        if (0==read_touch(result,ch))  // return 0 on success
         {
             uint8_t rc = is_gesture(result);
             if (rc)
             {
+                printf("Got Gesture\r\n");
                 return rc;
             }
+        }
+        else if (time_us_32() > startTime+(5*1000000)) // give up after 5 sec
+        {
+            return 0;
         }
 
     }

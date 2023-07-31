@@ -154,11 +154,11 @@ LCD_BIT_t* parseStatus(int ch, uint8_t *lastPacket, int len)
             {
                 case ELAPSED_TIME_CMD:  //elapsed time
                 {
-                    uint32_t b2,b3,b4;
+                    uint32_t b2,b3;//,b4;
                     b2 = lastPacket[cur+2];
                     b3 = lastPacket[cur+3];
-                    b4 = lastPacket[cur+4];
-                    uint32_t eTimeSec = (lastPacket[cur+1] + (b2*256) + (b3*65536))+(b4*1677216);
+                    //b4 = lastPacket[cur+4];
+                    uint32_t eTimeSec = (lastPacket[cur+1] | (b2<<8) | (b3<<16));// | (b4<<24));
                     eTimeSec = eTimeSec/4; // indicator counts in 1/4 sec increments
                     BIT->elapsedTime.hours = eTimeSec / 3600U;
                     BIT->elapsedTime.mins = (eTimeSec%3600U) / 60U;
@@ -297,7 +297,7 @@ LCD_BIT_t* parseStatus(int ch, uint8_t *lastPacket, int len)
 
 ///@brief Read Status from CH ch UART and parse it into LCD Status Struct
 bool read_LCD_status(int ch) {
-    uint8_t lastPacket[STATUS_LEN]; // allow for a full packet + a partial cmd from previous pkt 
+    uint8_t lastPacket[STATUS_LEN+10]; // allow for a full packet + a partial cmd from previous pkt 
     uint32_t startTime,currTime;
     int i=0;
     bool start=false;
@@ -337,7 +337,7 @@ bool read_LCD_status(int ch) {
     currTime=startTime;
 
     //read full status data or timeout after one frame sec
-    while (i<STATUS_LEN-7 && ((currTime - startTime) < (4500))) //
+    while (i<(STATUS_LEN-7) && ((currTime - startTime) < (4500))) //
     {
         // the first status command is always 0xFF00 (elapsed time)
 

@@ -10,6 +10,7 @@
 #define TOUCH_RESP_LEN 24
 
 int touch_init_all();
+void touch_reset();
 bool get_touch_pixel(uint8_t *result, uint8_t touchNum, uint16_t *x, uint16_t *y);
 void print_touch(uint8_t *result);
 uint8_t read_next_touch(uint8_t *result,int ch);

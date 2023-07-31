@@ -8,6 +8,9 @@
 #define TOUCH_CH1_PIN       17
 #define TOUCH_CH2_PIN       19
 
+#define TOUCH_CH1_RESET     16
+#define TOUCH_CH2_RESET     18
+
 #define TEMP_OK_CH1_PIN     11
 #define TEMP_OK_CH2_PIN     14
 
