@@ -6,6 +6,10 @@
 #endif
 
 #include "hardware/i2c.h"
+#include "pico/sync.h"
+
+// I2C reading is not reenternt
+extern critical_section_t i2ccritsec;
 
 void i2c_init_all();
 void i2c_scan(int channel);

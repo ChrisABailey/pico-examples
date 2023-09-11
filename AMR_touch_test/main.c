@@ -5,7 +5,6 @@
 #include <ctype.h>
 #include "pico/stdlib.h"
 #include "pico/binary_info.h"
-#include "pico/sync.h"
 #include <tusb.h>
 #include "IDC_IO.h"
 #include "i2c.h"
@@ -14,34 +13,19 @@
 #include "lcd.h"
 #include "touch.h"
 
-critical_section_t critsec;
 
 int touch_channels=0;
 touch_event_t last_touch[3];
 bool gesture_filter = false;
 
-// timer to asynronously read LCD status over serial
-struct repeating_timer lcd_status_timer;
-// timer to asyncronously read touch status over I2C
-struct repeating_timer touch_status_timer;
-
 const char promptString[] = "\r\nMAIN COM (?= help menu): ";
-const char menu[] = "\r\n20x8 DHA Tester:\r\n"
+const char menu[] = "\r\n20x8 Touch Tester:\r\n"
                        "\tI - Initialize the DHA\r\n"
                        "\tR - Reset Touch (shows FW Ver)\r\n"
-                       "\tB - Read DHA Controller Board BIT\r\n"
-                       "\tL - Read LCD Status\r\n"
-                       "\tS - Read DHA Controller Board Status \r\n"
-                       "\tF - Get Next Touch Response...\r\n"
+                        "\tF - Get Next Touch Response...\r\n"
                        "\tG -  Filter for Gestures (toggle)...\r\n"
                        "\tUx - Get Stuck Touch Location (x1-5)\r\n"
-                       "\tpxxxx (xxxx=0 to 3000) - Backlight PWM\r\n"                       
-                       "\tT - Read Backlight Temperatures\r\n"
-                       "\tC - Read LED Default Current\r\n"
-                       "\tD - Day Mode \r\n"
-                       "\tN - Night Mode\r\n"             
-                       "\tM - Enable/disable Driver Channels...\r\n"          
-                       "\t+/- Raise/Lower Backlight by 10%%\r\n";
+                       "\tM - Enable/disable Driver Channels...\r\n";
                        
 
 const char BACKSPACE = 127;
@@ -103,28 +87,27 @@ void prompt(bool echo)
         printf(promptString);
 }
 
+// read info from the LCD uarts and update LCD_BIT structures
+// bool lcd_status_timer_callback(struct repeating_timer *t) {
+//     static int ch = CH1;
 
-// read from lcd serial interface and update LCD status structure
-bool lcd_status_timer_callback(struct repeating_timer *t) {
-    static int ch = CH1;
+//     critical_section_enter_blocking (&critsec);
+//     // this should take less than 1 frame and typically < 3.5mS
+//     //read_LCD_status(ch);
+//     // next time read the other channel
+//     ch = (ch==CH1)?CH2:CH1;
+//     critical_section_exit (&critsec);
+//     gpio_put(LED_PIN, (ch==CH1));
 
-    critical_section_enter_blocking (&critsec);
-    // this should take less than 1 frame and typically < 3.5mS
-    read_LCD_status(ch);
-    // next time read the other channel
-    ch = (ch==CH1)?CH2:CH1;
-    critical_section_exit (&critsec);
-    gpio_put(LED_PIN, (ch==CH1));
-
-    return true;
-}
+//     return true;
+// }
 
 // read info from the touch i2c and update TOUCH_EVENT structures
 bool touch_status_timer_callback(struct repeating_timer *t) {
     static int ch = CH1;
     static uint8_t touch_resp[TOUCH_RESP_LEN];
 
-    critical_section_enter_blocking (&critsec);
+    //critical_section_enter_blocking (&critsec);
     // this should take less than 1 frame and typically < 3.5mS
     if(0==read_next_touch(touch_resp,ch,false))
     {
@@ -133,65 +116,17 @@ bool touch_status_timer_callback(struct repeating_timer *t) {
     }
     // next time read the other channel
     ch = (ch==CH1)?CH2:CH1;
-    critical_section_exit (&critsec);
+    //critical_section_exit (&critsec);
     gpio_put(LED_PIN, (ch==CH1));
 
     return true;
-}
-
-/// @brief Turn on recurring callback for reading LCD status every 14mS
-/// and turn off touch status timmer callback
-void start_lcd_status_timer()
-{
-    // don't try to have 2 timers going at once, if LCD is on turn off touch and vice versa
-    cancel_repeating_timer(&touch_status_timer);
-    // Create a repeating timer that reads the LCD status uarts.
-    add_repeating_timer_ms(14, lcd_status_timer_callback, NULL, &lcd_status_timer);
-
-    
-}
-
-/// @brief Turn on recurring callback for reading TOUCH status every 14mS
-/// and turn off LCD status timmer callback
-void start_touch_status_timer()
-{
-    // don't try to have 2 timers going at once, if LCD is on turn off touch and vice versa
-    cancel_repeating_timer(&lcd_status_timer);
-
-    clear_touch_event(&last_touch[CH1]);
-    clear_touch_event(&last_touch[CH2]);
-    // Create a repeating timer that reads the LCD status uarts.
-    add_repeating_timer_ms(14, lcd_status_timer_callback, NULL, &touch_status_timer);
 }
 
 void initialize()
 {
     i2c_init_all();
     printf("I2C Working \r\n");
-    int chs = led_init_all();
-    if (chs == CH1)
-    {
-        printf("LED CH1 Responding\r\n");
-    }
-    else if (chs == CH2)
-    {
-        printf("LED CH2 Responding\r\n");
-    }
-    else if (chs == (CH1|CH2))
-    {
-        printf("LED CH1 & CH2 Responding\r\n");
-    }
-    else
-    {
-        printf("Error, No LED controllers responded\r\n");
-    }
-
-    lcd_init_all();
-
-    chs = bit_init_all();
-
-    printf("BIT Channel 1 %s, BIT Channel 2 %s \r\n",(chs & CH1)? "Responding":"Not Found",(chs & CH2)? "Responding":"Not Found");
-
+    
     clear_touch_event(&last_touch[CH1]);
     clear_touch_event(&last_touch[CH2]);
 
@@ -210,9 +145,6 @@ void initialize()
     {
         printf("No Touch Controller Found\r\n");
     }
-
-    day(0.33,CH1);
-    day(0.33,CH2);
 
 }
 
@@ -250,6 +182,7 @@ void printStatus()
 }
 
 
+
 // Process user keystrokes
 int handleMenuKey(char key,bool echo)
 {
@@ -268,38 +201,9 @@ int handleMenuKey(char key,bool echo)
             printf(menu);
             break;
         }
-        case 'b':
-        {
-            uint8_t result1 = read_bit(CH1);
-            uint8_t result2 = read_bit(CH2);
-            if (echo)
-            {
-                printf("\r\nChannel 1 Controler Board BIT :");
-                print_bit(result1);
-                printf("\r\nChannel 2 Controler Board BIT :");
-                print_bit(result2);
-            }
-            else
-            {
-                printf("0x%x;",result1);
-                printf("0x%x;",result2);
-            }
-            break;
-        }
-        case 'c':
-        {
-            printf("\r\nLED Driver Current (0-4095) = %d \n",read_current(CH2));
-            break;
-        }        
-        case 'd':
-        {
-            day(0.3,CH1);            
-            day(0.3,CH2);
-            break;
-        }
+
         case 'f':
         {
-            start_touch_status_timer();
             printf("\r\nWaiting 5Sec for Touch...\r\n");
 
             uint32_t startTime;
@@ -330,52 +234,25 @@ int handleMenuKey(char key,bool echo)
                 }
                 print_touch_status(&last_touch[CH2]);
             }
-
-            start_lcd_status_timer();
             break;
-
         }
 
         case 'i':
         {
-
             i2c_scan(CH1);  
             i2c_scan(CH2);
             initialize();
+            break;
+        }
 
-            break;
-        }
-        case 'l':
-        {
-            printf("\r\n");
-            printf("Channel 1 LCD Status:\r\n");
-            print_LCD_status(&last_LCD_BIT_CH1);
-            printf("Channel 2 LCD Status:\r\n");
-            print_LCD_status(&last_LCD_BIT_CH2);
-            break;
-        }
-        case 'n':
-        {
-            night(0.3,CH1);
-            night(0.3,CH2);
-            break;
-        }        
-        case 'p': {
-            float newValue = getFloat(echo);
-            if (newValue >= 0.0f && newValue <= 3000.0f)
-            {
-                printf("\r\nPWM = %2.2f \r\n",set_pwm(newValue/3000.0f)*100);
-                //printf("Set successful\r\n");
-            }
-            break;
-        }
         case 'm': {
             printf("Enable channels (01,02,03(both)) currently (%02d):", get_connected_channels());
             int newValue = getInt(echo);
             if (newValue >= 1 && newValue <= 3)
             {
-                set_connected_channels(newValue);
+
                 touch_channels = newValue;
+                set_connected_channels(newValue);
                 //printf("Set successful\r\n");
             }
             break;
@@ -387,7 +264,6 @@ int handleMenuKey(char key,bool echo)
             clear_touch_event(&last_touch[CH1]);
             clear_touch_event(&last_touch[CH2]);
 
-
             uint32_t rc;
             rc = read_touch_fw_version(CH1);
             printf("\r\nTouch CH1 Firmware Ver: %x.%x.%x\r\n",(rc >> 16),(rc&0xFF00)>>8,(rc & 0x0FF));
@@ -396,32 +272,7 @@ int handleMenuKey(char key,bool echo)
 
             break;
         }
-        case 's':
-        {
-            printf("\r\n");
-            printStatus();
-            break;
-        }
-        case 't':
-        {
-            if (echo)
-            {
-                printf("\r\n┌─────LED Rail Temperature─┬──────┐\r\n");
-                printf("│CH1 LED Rail%d             │%3.1fC │\r\n",RAIL1,read_temperature(RAIL1,CH1));
-                printf("│CH1 LED Rail%d             │%3.1fC │\r\n",RAIL2,read_temperature(RAIL2,CH1));
-                printf("│CH2 LED Rail%d             │%3.1fC │\r\n",RAIL1,read_temperature(RAIL1,CH2));
-                printf("│CH2 LED Rail%d             │%3.1fC │\r\n",RAIL2,read_temperature(RAIL2,CH2));
-                printf("└──────────────────────────┴──────┘\r\n");
-            }
-            else
-            {
-                printf("%3.1f,%3.1f,%3.1f,%3.1f;",read_temperature(RAIL1,CH1),
-                                                read_temperature(RAIL2,CH1),
-                                                read_temperature(RAIL1,CH2),
-                                                read_temperature(RAIL2,CH2));
-            }
-            break;
-        }
+
         case 'u':
         {
             int Touch = getInt(echo);
@@ -442,24 +293,9 @@ int handleMenuKey(char key,bool echo)
         {
             gesture_filter = !gesture_filter;
             printf("Gesture Filter %s \r\n",gesture_filter?"On":"Off");
-
             break;
         }        
-        case '+': // Increase PWM by 10%
-        {
-            float curr = get_pwm();
-            curr = curr*1.1;
-            printf("PWM = %2.2f \r\n",set_pwm(curr)*100);
-            break;
-        }
-        case '-':               
-        {
-            float curr = get_pwm();
-            curr = curr * 0.9;
-            printf("PWM = %2.2f \r\n",set_pwm(curr)*100);
-            
-            break;
-        }
+        
         default:
         {
             prompt(echo);            
@@ -472,59 +308,58 @@ int handleMenuKey(char key,bool echo)
 }
 
 
-
-
-
 int main() {
     bool autoTest=false;
     bool echo = true;
     int ledOn = 0;
-    
+    struct repeating_timer statusTimer;
 
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
 
-    gpio_init(BIT_CH1_PIN      );
-    gpio_init(BIT_CH2_PIN      );
-    gpio_init(TEMP_OK_CH1_PIN  );
-    gpio_init(TEMP_OK_CH2_PIN  );
-    gpio_init(LCD_ALARM_CH1_PIN);
-    gpio_init(LCD_ALARM_CH2_PIN);
-    gpio_init(PD_CH1_PIN       );
-    gpio_init(PD_CH2_PIN       );
+    //gpio_init(BIT_CH1_PIN      );
+    //gpio_init(BIT_CH2_PIN      );
+    //gpio_init(TEMP_OK_CH1_PIN  );
+    //gpio_init(TEMP_OK_CH2_PIN  );
+    //gpio_init(LCD_ALARM_CH1_PIN);
+    //gpio_init(LCD_ALARM_CH2_PIN);
+    //gpio_init(PD_CH1_PIN       );
+    //gpio_init(PD_CH2_PIN       );
     gpio_init(TOUCH_CH1_PIN    );
     gpio_init(TOUCH_CH2_PIN    );
     gpio_init(TOUCH_CH1_RESET  );
     gpio_init(TOUCH_CH2_RESET  );   
 
-    gpio_set_dir(BIT_CH1_PIN      ,GPIO_IN);
-    gpio_set_dir(BIT_CH2_PIN      ,GPIO_IN);
-    gpio_set_dir(TEMP_OK_CH1_PIN  ,GPIO_IN);
-    gpio_set_dir(TEMP_OK_CH2_PIN  ,GPIO_IN);
-    gpio_set_dir(LCD_ALARM_CH1_PIN,GPIO_IN);
-    gpio_set_dir(LCD_ALARM_CH2_PIN,GPIO_IN);
-    gpio_set_dir(PD_CH1_PIN       ,GPIO_IN);
-    gpio_set_dir(PD_CH2_PIN       ,GPIO_IN);
+    // gpio_set_dir(BIT_CH1_PIN      ,GPIO_IN);
+    // gpio_set_dir(BIT_CH2_PIN      ,GPIO_IN);
+    // gpio_set_dir(TEMP_OK_CH1_PIN  ,GPIO_IN);
+    // gpio_set_dir(TEMP_OK_CH2_PIN  ,GPIO_IN);
+    // gpio_set_dir(LCD_ALARM_CH1_PIN,GPIO_IN);
+    // gpio_set_dir(LCD_ALARM_CH2_PIN,GPIO_IN);
+    // gpio_set_dir(PD_CH1_PIN       ,GPIO_IN);
+    // gpio_set_dir(PD_CH2_PIN       ,GPIO_IN);
     gpio_set_dir(TOUCH_CH1_PIN       ,GPIO_IN);
     gpio_set_dir(TOUCH_CH2_PIN       ,GPIO_IN);
     gpio_set_dir(TOUCH_CH1_RESET, GPIO_OUT);
     gpio_set_dir(TOUCH_CH2_RESET, GPIO_OUT);
 
-    critical_section_init(&critsec);
+    //critical_section_init(&critsec);
     stdio_init_all();
-
-    // wait for tiny usb device to be connected (wait for host to oupe the usb port)
     while (!tud_cdc_connected()) { 
         sleep_ms(150);  
         gpio_put(LED_PIN, ledOn);
         ledOn = !ledOn;
     }
 
-    printf("USB Uart Connected()\n");
+    printf("USB Uart Connected()\r\n");
 
 
     initialize();
-    start_lcd_status_timer();
+
+    // Create a repeating timer that reads the LCD status uarts.
+    //add_repeating_timer_ms(14, lcd_status_timer_callback, NULL, &statusTimer);
+    add_repeating_timer_ms(20, touch_status_timer_callback, NULL, &statusTimer);
+    //gpio_set_irq_enabled_with_callback(2, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
 
     prompt(echo);
     
@@ -538,16 +373,9 @@ int main() {
                 autoTest = !autoTest;
 
                 printf("auto-test = %s\r\n",autoTest?"On":"Off");
-                if (autoTest)
-                {
-                    start_touch_status_timer();
-                }
-                else
-                {
-                    start_lcd_status_timer();
-                }
                 print_touch_status(&last_touch[CH1]);
-
+                clear_touch_event(&last_touch[CH1]);
+                clear_touch_event(&last_touch[CH2]);
             }
             stdio_flush();
         }

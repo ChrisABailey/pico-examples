@@ -51,11 +51,9 @@ extern LCD_BIT_t last_LCD_BIT_CH1;
 extern LCD_BIT_t last_LCD_BIT_CH2;
 
 void lcd_init_all();
-void print_LCD_status(LCD_BIT_t* BIT);
-void erase_LCD_status(LCD_BIT_t* BIT);
-
+void print_status(LCD_BIT_t* BIT);
 uint8_t get_fpga_ver(int ch); 
-float get_LCD_temp(int ch);         
+float get_lcd_temp(int ch);         
 
 /// @brief reads the serial port associated with ch
 /// @returns false if we need to read more data, true if we are complete

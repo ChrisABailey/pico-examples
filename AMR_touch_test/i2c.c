@@ -6,6 +6,8 @@
 #include "IDC_IO.h"
 #include "i2c.h"
 
+critical_section_t i2ccritsec;
+
 // I2C reserves some addresses for special purposes. We exclude these from the scan.
 // These are any addresses of the form 000 0xxx or 111 1xxx
 bool reserved_addr(uint8_t addr) {
@@ -49,9 +51,9 @@ void i2c_scan(int channel) {
             ret = PICO_ERROR_GENERIC;
         else
         {
-            critical_section_enter_blocking(&critsec);
+            critical_section_enter_blocking(&i2ccritsec);
             ret = i2c_read_timeout_us((channel == CH1)?i2c0:i2c1, addr, &rxdata, 1, false,16000);
-            critical_section_exit(&critsec);
+            critical_section_exit(&i2ccritsec);
         }
         printf(ret < 0 ? "." : "@");
         printf(addr % 16 == 15 ? "\n" : "  ");
@@ -76,9 +78,9 @@ int qScan(int channel, int start)
             ret = PICO_ERROR_GENERIC;
         else
         {
-            critical_section_enter_blocking(&critsec);
+            critical_section_enter_blocking(&i2ccritsec);
             ret = i2c_read_timeout_us((channel == CH1)?i2c0:i2c1, addr, &rxdata, 1, false,16000);
-            critical_section_exit(&critsec);
+            critical_section_exit(&i2ccritsec);
         }
         if (ret>=0) 
             return addr;
@@ -107,10 +109,10 @@ int i2c_reg_write(  int channel,
         msg[i + 1] = buf[i];
     }
 
-    critical_section_enter_blocking(&critsec);
+    critical_section_enter_blocking(&i2ccritsec);
     // Write data to register(s) over I2C
     int br = i2c_write_timeout_us((channel==CH1)? i2c0:i2c1, addr, msg, (nbytes + 1), false,16000)-1;
-    critical_section_exit(&critsec);
+    critical_section_exit(&i2ccritsec);
     return br;
 }
 
@@ -131,7 +133,7 @@ int i2c_reg_read(  int channel,
 
     // we get an error if the read status interupt occurs mid write/read
     // this makes sure they dont conflict
-    critical_section_enter_blocking (&critsec);
+    critical_section_enter_blocking (&i2ccritsec);
 
     // Read data from register(s) over I2C
     int rc = i2c_write_timeout_us((channel==CH1)? i2c0:i2c1, addr, &reg, 1, true,16000);
@@ -142,7 +144,7 @@ int i2c_reg_read(  int channel,
     }
     
     num_bytes_read = i2c_read_blocking((channel==CH1)? i2c0:i2c1, addr, buf, nbytes, false);
-    critical_section_exit (&critsec);
+    critical_section_exit (&i2ccritsec);
     if (num_bytes_read == PICO_ERROR_GENERIC)
     {
         printf("Error reading CH%d Addr(0x%x) Reg(5x%x)",channel,addr,reg);
@@ -170,7 +172,7 @@ int i2c_reg_read_n(  int channel,
 
     // we get an error if the read status interupt occurs mid write/read
     // this makes sure they dont conflict
-    critical_section_enter_blocking (&critsec);
+    critical_section_enter_blocking (&i2ccritsec);
 
     // Read data from register(s) over I2C
     int rc = i2c_write_timeout_us((channel==CH1)? i2c0:i2c1, addr, reg, len, true,16000);
@@ -181,7 +183,7 @@ int i2c_reg_read_n(  int channel,
     }
     
     num_bytes_read = i2c_read_blocking((channel==CH1)? i2c0:i2c1, addr, buf, nbytes, false);
-    critical_section_exit (&critsec);
+    critical_section_exit (&i2ccritsec);
     if (num_bytes_read == PICO_ERROR_GENERIC)
     {
         printf("Error reading CH%d Addr(0x%x) Reg(5x%x)",channel,addr,reg);

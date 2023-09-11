@@ -110,7 +110,7 @@ uint8_t get_fpga_ver(int ch)
     return BIT->fpga;
 }
 
-float get_LCD_temp(int ch) 
+float get_lcd_temp(int ch) 
 { 
     LCD_BIT_t *BIT;
     if (ch == CH1)
@@ -389,7 +389,7 @@ bool read_LCD_status(int ch) {
 
 }
 
-void print_LCD_status(LCD_BIT_t* BIT)
+void print_status(LCD_BIT_t* BIT)
 {
     if (BIT->failedReads > 50)
     {
@@ -399,63 +399,53 @@ void print_LCD_status(LCD_BIT_t* BIT)
     uint16_t h = BIT->elapsedTime.hours;
     uint8_t m = BIT->elapsedTime.mins;
     uint8_t s = BIT->elapsedTime.secs;
-    printf("┌────────────LCD┬Status──┐\r\n");
-    printf("│Elapsed Time   │%2d:%02d:%02d│\r\n",h,m,s);
-    printf("│LCD Temp       │ %2.1fdegC│\r\n",BIT->temperature);
-    printf("│LCD Good       │ %s   │\r\n",(BIT->lcdGood)?" OK ":"Fail");
-    printf("│LVDS Timeout   │ %s   │\r\n",(BIT->lvdsTimeout)?" OK ":"Fail");
-    printf("│DRP Source     │ %s   │\r\n",(BIT->drpSource)?" OK ":"Fail");
-    printf("│DRP Gate       │ %s   │\r\n",(BIT->drpGate)?" OK ":"Fail");
-    printf("│vdd SA OK      │ %s   │\r\n",(BIT->vddsa)?" OK ":"Fail");
-    printf("│Source Enable  │ %s   │\r\n",(BIT->sourceEnable)?" OK ":"Fail");
-    printf("│Source Disable │ %s   │\r\n",(BIT->sourceDisable)?" OK ":"Fail");
-    printf("│Enable         │ %s   │\r\n",(BIT->enable)?" OK ":"Fail");
-    printf("│Gate Pch Enbl  │ %s   │\r\n",(BIT->gatePchEnable)?" OK ":"Fail");
-    printf("│Gate Pch Dsbl  │ %s   │\r\n",(BIT->gatePchDisable)?" OK ":"Fail");
-    printf("│Gate Nch Enbl  │ %s   │\r\n",(BIT->gatePchEnable)?" OK ":"Fail");
-    printf("│Gate Nch Dsbl  │ %s   │\r\n",(BIT->gatePchDisable)?" OK ":"Fail");
+    printf("\tElapsed Time  \t= %d:%02d:%02d\r\n",h,m,s);
+    printf("\tLCD Temp      \t= %2.1fdegC \r\n",BIT->temperature);
+    printf("\tLCD Good      \t= %s \r\n",(BIT->lcdGood)?"OK":"Fail");
+    printf("\tLVDS Timeout  \t= %s \r\n",(BIT->lvdsTimeout)?"OK":"Fail");
+    printf("\tDRP Source    \t= %s \r\n",(BIT->drpSource)?"OK":"Fail");
+    printf("\tDRP Gate      \t= %s \r\n",(BIT->drpGate)?"OK":"Fail");
+    printf("\tvdd SA OK     \t= %s \r\n",(BIT->vddsa)?"OK":"Fail");
+    printf("\tSource Enable \t= %s \r\n",(BIT->sourceEnable)?"OK":"Fail");
+    printf("\tSource Disable\t= %s \r\n",(BIT->sourceDisable)?"OK":"Fail");
+    printf("\tEnable        \t= %s \r\n",(BIT->enable)?"OK":"Fail");
+    printf("\tGate Pch Enbl \t= %s \r\n",(BIT->gatePchEnable)?"OK":"Fail");
+    printf("\tGate Pch Dsbl \t= %s \r\n",(BIT->gatePchDisable)?"OK":"Fail");
+    printf("\tGate Nch Enbl \t= %s \r\n",(BIT->gatePchEnable)?"OK":"Fail");
+    printf("\tGate Nch Dsbl \t= %s \r\n",(BIT->gatePchDisable)?"OK":"Fail");
 
     if (BIT->bitLVDS == 0x0F)
     {
-        printf("│BIT LVDS        │  OK    │\r\n");
+        printf("\tBIT LVDS       \t= OK\r\n");
     } else
     {
-        printf("│BIT LVDS        │Fail(%2x)|\r\n",BIT->bitLVDS);
+        printf("\tBIT LVDS       \t= Fail(0x%x)\r\n",BIT->bitLVDS);
     }
 
     if (BIT->bitLCD1 == 0xFF)
     {
-        printf("│BIT LCD1        │  OK    |\r\n");
+        printf("\tBIT LCD1       \t= OK\r\n");
     } else
     {
-        printf("│BIT LCD1        │Fail(%2x)|\r\n",BIT->bitLCD1);
+        printf("\tBIT LCD1       \t= Fail(0x%x)\r\n",BIT->bitLCD1);
     }
 
     if (BIT->bitLCD2 == 0x07)
     {
-        printf("│BIT LCD2       │  OK   │\r\n");
+        printf("\tBIT LCD2      \t= OK\r\n");
     } else
     {
-        printf("│BIT LCD2       │Fail(%2x)|\r\n",BIT->bitLCD2);
+        printf("\tBIT LCD2      \t= Fail(0x%x)\r\n",BIT->bitLCD2);
     }
     
-    printf("│ESD BUS SW HIGH │ %s   │\r\n",(BIT->ESDHigh)?" OK ":"Fail");
-    printf("│ESD BUS SW LOW  │ %s   │\r\n",(BIT->ESDLow)?" OK ":"Fail");
-    printf("│Vdd SA current │ %4d   │\r\n",BIT->vddsaI);
-    printf("│cop R1         │%02x,%02x,%02x│\r\n",BIT->copR1.r,BIT->copR1.g,BIT->copR1.b);
-    printf("│cop R2         │%02x,%02x,%02x│\r\n",BIT->copR2.r,BIT->copR2.g,BIT->copR2.b);
-    printf("│cop L1         │%02x,%02x,%02x│\r\n",BIT->copL1.r,BIT->copL1.g,BIT->copL1.b);
-    printf("│cop L2         │%02x,%02x,%02x│\r\n",BIT->copL2.r,BIT->copL2.g,BIT->copL2.b);    
-    printf("│FPGA Ver       │ 0x%02x   │\r\n",BIT->fpga);
-    printf("└───────────────┴────────┘\r\n");
+    printf("\tESD BUS SW HIGH\t= %s \r\n",(BIT->ESDHigh)?"OK":"Fail");
+    printf("\tESD BUS SW LOW \t= %s \r\n",(BIT->ESDLow)?"OK":"Fail");
+    printf("\tVdd SA current\t= %d \r\n",BIT->vddsaI);
+    printf("\tcop R1        \t= (0x%x,0x%x,0x%x) \r\n",BIT->copR1.r,BIT->copR1.g,BIT->copR1.b);
+    printf("\tcop R2        \t= (0x%x,0x%x,0x%x) \r\n",BIT->copR2.r,BIT->copR2.g,BIT->copR2.b);
+    printf("\tcop L1        \t= (0x%x,0x%x,0x%x) \r\n",BIT->copL1.r,BIT->copL1.g,BIT->copL1.b);
+    printf("\tcop L2        \t= (0x%x,0x%x,0x%x) \r\n",BIT->copL2.r,BIT->copL2.g,BIT->copL2.b);    
+    printf("\tFPGA Ver      \t= 0x%x \r\n",BIT->fpga);
 
 }
 
-void erase_LCD_status(LCD_BIT_t* BIT)
-{
-    if (BIT->failedReads > 50)
-        printf("\033[1A");
-    else
-        // back up 26 lines
-        printf("\033[26A");
-}
