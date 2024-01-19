@@ -49,9 +49,9 @@ void i2c_scan(int channel) {
             ret = PICO_ERROR_GENERIC;
         else
         {
-            critical_section_enter_blocking(&critsec);
+            critical_section_enter_blocking(&lcd_critsec);
             ret = i2c_read_timeout_us((channel == CH1)?i2c0:i2c1, addr, &rxdata, 1, false,16000);
-            critical_section_exit(&critsec);
+            critical_section_exit(&lcd_critsec);
         }
         printf(ret < 0 ? "." : "@");
         printf(addr % 16 == 15 ? "\n" : "  ");
@@ -76,9 +76,9 @@ int qScan(int channel, int start)
             ret = PICO_ERROR_GENERIC;
         else
         {
-            critical_section_enter_blocking(&critsec);
+            critical_section_enter_blocking(&lcd_critsec);
             ret = i2c_read_timeout_us((channel == CH1)?i2c0:i2c1, addr, &rxdata, 1, false,16000);
-            critical_section_exit(&critsec);
+            critical_section_exit(&lcd_critsec);
         }
         if (ret>=0) 
             return addr;
@@ -107,10 +107,10 @@ int i2c_reg_write(  int channel,
         msg[i + 1] = buf[i];
     }
 
-    critical_section_enter_blocking(&critsec);
+    critical_section_enter_blocking(&lcd_critsec);
     // Write data to register(s) over I2C
     int br = i2c_write_timeout_us((channel==CH1)? i2c0:i2c1, addr, msg, (nbytes + 1), false,16000)-1;
-    critical_section_exit(&critsec);
+    critical_section_exit(&lcd_critsec);
     return br;
 }
 
@@ -131,21 +131,26 @@ int i2c_reg_read(  int channel,
 
     // we get an error if the read status interupt occurs mid write/read
     // this makes sure they dont conflict
-    critical_section_enter_blocking (&critsec);
+    critical_section_enter_blocking (&lcd_critsec);
 
     // Read data from register(s) over I2C
     int rc = i2c_write_timeout_us((channel==CH1)? i2c0:i2c1, addr, &reg, 1, true,16000);
-    if (rc == PICO_ERROR_GENERIC || rc == PICO_ERROR_TIMEOUT)
+    if (rc == PICO_ERROR_GENERIC ) 
     {
-        printf ("Error reading from I2C CH%d, ADDR=0x%x, Reg=0x%x\r\n",channel,addr,reg);
+        printf ("PICO_ERROR_GENERIC Error writing/reading from I2C CH%d, ADDR=0x%x, Reg=0x%x\r\n",channel,addr,reg);
+        return 0;
+    }
+    else if (rc == PICO_ERROR_TIMEOUT)
+    {
+        printf ("PICO_ERROR_TIMEOUT Error writing/reading from I2C CH%d, ADDR=0x%x, Reg=0x%x\r\n",channel,addr,reg);
         return 0;
     }
     
     num_bytes_read = i2c_read_blocking((channel==CH1)? i2c0:i2c1, addr, buf, nbytes, false);
-    critical_section_exit (&critsec);
+    critical_section_exit (&lcd_critsec);
     if (num_bytes_read == PICO_ERROR_GENERIC)
     {
-        printf("Error reading CH%d Addr(0x%x) Reg(5x%x)",channel,addr,reg);
+        printf("Error reading CH%d Addr(0x%x) Reg(0x%x) (no response)",channel,addr,reg);
     }
 
     return num_bytes_read;
@@ -170,21 +175,26 @@ int i2c_reg_read_n(  int channel,
 
     // we get an error if the read status interupt occurs mid write/read
     // this makes sure they dont conflict
-    critical_section_enter_blocking (&critsec);
+    critical_section_enter_blocking (&lcd_critsec);
 
     // Read data from register(s) over I2C
     int rc = i2c_write_timeout_us((channel==CH1)? i2c0:i2c1, addr, reg, len, true,16000);
-    if (rc == PICO_ERROR_GENERIC || rc == PICO_ERROR_TIMEOUT)
+    if (rc == PICO_ERROR_GENERIC )
     {
-        printf ("Error reading from I2C CH%d, ADDR=0x%x, Reg=0x%x\r\n",channel,addr,reg);
+        printf ("Generic Error writing I2C CH%d, ADDR=0x%x, Reg=0x%x (no ACK)\r\n",channel,addr,reg);
         return 0;
     }
+    else if ( rc == PICO_ERROR_TIMEOUT)
+     {
+        printf ("Timeout Error writing I2C CH%d, ADDR=0x%x, Reg=0x%x\r\n",channel,addr,reg);
+        return 0;
+    }   
     
     num_bytes_read = i2c_read_blocking((channel==CH1)? i2c0:i2c1, addr, buf, nbytes, false);
-    critical_section_exit (&critsec);
+    critical_section_exit (&lcd_critsec);
     if (num_bytes_read == PICO_ERROR_GENERIC)
     {
-        printf("Error reading CH%d Addr(0x%x) Reg(5x%x)",channel,addr,reg);
+        printf("Generic Error reading CH%d Addr(0x%x) Reg(0x%x)",channel,addr,reg);
     }
 
     return num_bytes_read;

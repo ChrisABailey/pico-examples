@@ -14,10 +14,11 @@
 #include "lcd.h"
 #include "touch.h"
 
-critical_section_t critsec;
+critical_section_t lcd_critsec;
+//critical_section_t touch_critsec;
 
 int touch_channels=0;
-touch_event_t last_touch[3];
+volatile touch_event_t last_touch[3];
 bool gesture_filter = false;
 
 // timer to asynronously read LCD status over serial
@@ -25,7 +26,7 @@ struct repeating_timer lcd_status_timer;
 // timer to asyncronously read touch status over I2C
 struct repeating_timer touch_status_timer;
 
-const char promptString[] = "\r\nMAIN COM (?= help menu): ";
+const char promptString[] = "\r\nMAIN COM (?= help menu):\r\n";
 const char menu[] = "\r\n20x8 DHA Tester:\r\n"
                        "\tI - Initialize the DHA\r\n"
                        "\tR - Reset Touch (shows FW Ver)\r\n"
@@ -37,11 +38,12 @@ const char menu[] = "\r\n20x8 DHA Tester:\r\n"
                        "\tUx - Get Stuck Touch Location (x1-5)\r\n"
                        "\tpxxxx (xxxx=0 to 3000) - Backlight PWM\r\n"                       
                        "\tT - Read Backlight Temperatures\r\n"
-                       "\tC - Read LED Default Current\r\n"
+                       "\tC - Clear Sticky Touches\r\n"
                        "\tD - Day Mode \r\n"
                        "\tN - Night Mode\r\n"             
                        "\tM - Enable/disable Driver Channels...\r\n"          
-                       "\t+/- Raise/Lower Backlight by 10%%\r\n";
+                       "\t+/- Raise/Lower Backlight by 10%%\r\n"
+                       "\t7 - Toggle Touch Test Mode\r\n";
                        
 
 const char BACKSPACE = 127;
@@ -107,13 +109,23 @@ void prompt(bool echo)
 // read from lcd serial interface and update LCD status structure
 bool lcd_status_timer_callback(struct repeating_timer *t) {
     static int ch = CH1;
+    static uint8_t touch_resp[TOUCH_RESP_LEN];
 
-    critical_section_enter_blocking (&critsec);
+    critical_section_enter_blocking (&lcd_critsec);
     // this should take less than 1 frame and typically < 3.5mS
     read_LCD_status(ch);
+    critical_section_exit (&lcd_critsec);
+
+    if(0==read_next_touch(touch_resp,ch,false))
+    {
+        if (!gesture_filter || is_gesture(touch_resp) )
+        {
+            decode_touch(touch_resp,&last_touch[ch]);
+        }
+    }
+
     // next time read the other channel
     ch = (ch==CH1)?CH2:CH1;
-    critical_section_exit (&critsec);
     gpio_put(LED_PIN, (ch==CH1));
 
     return true;
@@ -124,17 +136,26 @@ bool touch_status_timer_callback(struct repeating_timer *t) {
     static int ch = CH1;
     static uint8_t touch_resp[TOUCH_RESP_LEN];
 
-    critical_section_enter_blocking (&critsec);
+    
     // this should take less than 1 frame and typically < 3.5mS
     if(0==read_next_touch(touch_resp,ch,false))
     {
+        gpio_put(LED_PIN, false);
         if (!gesture_filter || is_gesture(touch_resp) )
+        {
+            //critical_section_enter_blocking (&touch_critsec);
             decode_touch(touch_resp,&last_touch[ch]);
+            //critical_section_exit (&touch_critsec);
+            gpio_put(LED_PIN, true);
+        }
+    }
+    else
+    {
+       gpio_put(LED_PIN, false); 
     }
     // next time read the other channel
     ch = (ch==CH1)?CH2:CH1;
-    critical_section_exit (&critsec);
-    gpio_put(LED_PIN, (ch==CH1));
+    //gpio_put(LED_PIN, (ch==CH1));
 
     return true;
 }
@@ -161,7 +182,7 @@ void start_touch_status_timer()
     clear_touch_event(&last_touch[CH1]);
     clear_touch_event(&last_touch[CH2]);
     // Create a repeating timer that reads the LCD status uarts.
-    add_repeating_timer_ms(14, lcd_status_timer_callback, NULL, &touch_status_timer);
+    add_repeating_timer_ms(14, touch_status_timer_callback, NULL, &touch_status_timer);
 }
 
 void initialize()
@@ -288,7 +309,9 @@ int handleMenuKey(char key,bool echo)
         }
         case 'c':
         {
-            printf("\r\nLED Driver Current (0-4095) = %d \n",read_current(CH2));
+            printf("Clearing sticky Touches\r\n");
+            clear_sticky_touch(CH1);
+            clear_sticky_touch(CH2);
             break;
         }        
         case 'd':
@@ -299,8 +322,8 @@ int handleMenuKey(char key,bool echo)
         }
         case 'f':
         {
-            start_touch_status_timer();
-            printf("\r\nWaiting 5Sec for Touch...\r\n");
+            //start_touch_status_timer();
+            printf("\r\nWaiting up to 5Sec for Touch...\r\n");
 
             uint32_t startTime;
 
@@ -317,7 +340,7 @@ int handleMenuKey(char key,bool echo)
                     if (time_us_32() > startTime+(5*1000000)) // give up after 5 sec
                         break;
                 }
-                print_touch_status(&last_touch[CH1]);
+                print_touch_status(&last_touch[CH1],CH1);
             }
             
             startTime = time_us_32();
@@ -328,10 +351,10 @@ int handleMenuKey(char key,bool echo)
                     if (time_us_32() > startTime+(2*1000000)) // give up after 2 sec
                         break;
                 }
-                print_touch_status(&last_touch[CH2]);
+                print_touch_status(&last_touch[CH2],CH2);
             }
 
-            start_lcd_status_timer();
+            //start_lcd_status_timer();
             break;
 
         }
@@ -441,8 +464,9 @@ int handleMenuKey(char key,bool echo)
         case 'g':
         {
             gesture_filter = !gesture_filter;
-            printf("Gesture Filter %s \r\n",gesture_filter?"On":"Off");
-
+            printf("\r\nGesture Filter %s \r\n",gesture_filter?"On":"Off");
+            print_touch_status(&last_touch[CH1],CH1);
+            print_touch_status(&last_touch[CH2],CH2);
             break;
         }        
         case '+': // Increase PWM by 10%
@@ -510,7 +534,8 @@ int main() {
     gpio_set_dir(TOUCH_CH1_RESET, GPIO_OUT);
     gpio_set_dir(TOUCH_CH2_RESET, GPIO_OUT);
 
-    critical_section_init(&critsec);
+    critical_section_init(&lcd_critsec);
+    //critical_section_init(&touch_critsec);    
     stdio_init_all();
 
     // wait for tiny usb device to be connected (wait for host to oupe the usb port)
@@ -521,7 +546,6 @@ int main() {
     }
 
     printf("USB Uart Connected()\n");
-
 
     initialize();
     start_lcd_status_timer();
@@ -536,31 +560,42 @@ int main() {
             if (handleMenuKey(key,echo) == '7')  // The 7 key toggles autotest
             {
                 autoTest = !autoTest;
-
-                printf("auto-test = %s\r\n",autoTest?"On":"Off");
                 if (autoTest)
                 {
-                    start_touch_status_timer();
+                    printf("\r\nTouch auto-test mode, (press 7 to exit)\r\n");
+                    if (gesture_filter)
+                    {
+                        printf("Note: Gesture Filter is active, (press G to toggle filter off)\r\n");
+                    }
+                    compare_touch_status(&last_touch[CH1],&last_touch[CH2]);
                 }
                 else
                 {
-                    start_lcd_status_timer();
+                    prompt(echo);
                 }
-                print_touch_status(&last_touch[CH1]);
-
             }
             stdio_flush();
         }
         if (autoTest)
         {
-            if (last_touch[CH1].new_data)
+            if (last_touch[CH1].new_data || last_touch[CH2].new_data)
             {
                 erase_touch_status();
-                print_touch_status(&last_touch[CH1]); 
+                compare_touch_status(&last_touch[CH1],&last_touch[CH2]);
+
             }
         }
-        ledOn= !ledOn;
-
+        else
+        {
+            if (last_touch[CH1].new_data)
+            {
+                print_touch_status(&last_touch[CH1],CH1);
+            }
+            if (last_touch[CH2].new_data)
+            {
+                print_touch_status(&last_touch[CH2],CH2);
+            }
+        }
     }
     return 0;
 }

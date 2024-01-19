@@ -96,10 +96,10 @@ int i2c_reg_write(  int channel,
                 uint8_t *buf,
                 const uint8_t nbytes) {
 
-    uint8_t msg[nbytes + 1];
+    uint8_t msg[255];
 
     // Check to make sure caller is sending 1 or more bytes
-    if (nbytes < 1) {
+    if (nbytes < 1 || nbytes > 254) {
         return 0;
     }
 
@@ -137,9 +137,14 @@ int i2c_reg_read(  int channel,
 
     // Read data from register(s) over I2C
     int rc = i2c_write_timeout_us((channel==CH1)? i2c0:i2c1, addr, &reg, 1, true,16000);
-    if (rc == PICO_ERROR_GENERIC || rc == PICO_ERROR_TIMEOUT)
+    if (rc == PICO_ERROR_GENERIC ) 
     {
-        printf ("Error reading from I2C CH%d, ADDR=0x%x, Reg=0x%x\r\n",channel,addr,reg);
+        printf ("PICO_ERROR_GENERIC Error writing/reading from I2C CH%d, ADDR=0x%x, Reg=0x%x\r\n",channel,addr,reg);
+        return 0;
+    }
+    else if (rc == PICO_ERROR_TIMEOUT)
+    {
+        printf ("PICO_ERROR_TIMEOUT Error writing/reading from I2C CH%d, ADDR=0x%x, Reg=0x%x\r\n",channel,addr,reg);
         return 0;
     }
     
@@ -147,7 +152,7 @@ int i2c_reg_read(  int channel,
     critical_section_exit (&i2ccritsec);
     if (num_bytes_read == PICO_ERROR_GENERIC)
     {
-        printf("Error reading CH%d Addr(0x%x) Reg(5x%x)",channel,addr,reg);
+        printf("Error reading CH%d Addr(0x%x) Reg(0x%x)",channel,addr,reg);
     }
 
     return num_bytes_read;
@@ -170,23 +175,29 @@ int i2c_reg_read_n(  int channel,
         return 0;
     }
 
+
     // we get an error if the read status interupt occurs mid write/read
     // this makes sure they dont conflict
-    critical_section_enter_blocking (&i2ccritsec);
+    //critical_section_enter_blocking (&lcd_critsec);
 
     // Read data from register(s) over I2C
     int rc = i2c_write_timeout_us((channel==CH1)? i2c0:i2c1, addr, reg, len, true,16000);
-    if (rc == PICO_ERROR_GENERIC || rc == PICO_ERROR_TIMEOUT)
+    if (rc == PICO_ERROR_GENERIC )
     {
-        printf ("Error reading from I2C CH%d, ADDR=0x%x, Reg=0x%x\r\n",channel,addr,reg);
+        printf ("Generic Error writing I2C CH%d, ADDR=0x%x, Reg=0x%x (no ACK)\r\n",channel,addr,reg);
         return 0;
     }
+    else if ( rc == PICO_ERROR_TIMEOUT)
+     {
+        printf ("Timeout Error writing I2C CH%d, ADDR=0x%x, Reg=0x%x\r\n",channel,addr,reg);
+        return 0;
+    }   
     
     num_bytes_read = i2c_read_blocking((channel==CH1)? i2c0:i2c1, addr, buf, nbytes, false);
-    critical_section_exit (&i2ccritsec);
+    //critical_section_exit (&lcd_critsec);
     if (num_bytes_read == PICO_ERROR_GENERIC)
     {
-        printf("Error reading CH%d Addr(0x%x) Reg(5x%x)",channel,addr,reg);
+        printf("Generic Error reading CH%d Addr(0x%x) Reg(0x%x)",channel,addr,reg);
     }
 
     return num_bytes_read;

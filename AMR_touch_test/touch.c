@@ -69,6 +69,32 @@ void touch_reset()
     busy_wait_ms(100);  
 }
 
+uint8_t clear_sticky_touch(uint8_t ch)
+{
+    uint8_t data[3];
+    uint8_t resp[4];
+    if (ch & i2c_tchannels)
+    {  
+        uint8_t addr = get_touch_addr(ch);
+        data[0] = 0xA0;
+        data[1] = 0xC2;
+        data[2] = 0x43;
+        data[3] = 0x53;
+
+        int count = i2c_reg_read_n(ch,addr,data,4,resp,4);  // FW resp is 5 bytes
+        //int count = i2c_reg_write(ch,addr,reg,data,3);  // no response
+        if (count!= 4)
+        {
+            printf("Write accepted %d bytes (expected %d)\r\n",count,4);
+            return 0;
+        }
+
+        printf("resp = 0x%x,%x,%x,%x\r\n",resp[0],resp[1],resp[2],resp[3]);
+        return count;
+    }
+    return 0;
+}
+
 int touch_init_all()
 {
 
@@ -201,9 +227,9 @@ void print_touch(uint8_t *result)
     }
 }
 
-void print_touch_status(touch_event_t *touch)
+void print_touch_status(volatile touch_event_t *touch,uint8_t ch)
 {
-    printf("┌────Touch┬Status──────┐\r\n");
+    printf("┌────Touch┬Status─CH%d──┐\r\n",ch);
     printf("│ Touches │    %05b   │\r\n",touch->touches);
     printf("├─────────┼────────────┤\r\n"); 
     for (int i=0;i<5;i++)
@@ -218,13 +244,54 @@ void print_touch_status(touch_event_t *touch)
     touch->new_data = false;
 }
 
+/// @brief given 2 touch events, compare their locations and print status in RED if more than 4mm apart
+/// @param touch1 left touch status
+/// @param touch2 right touch status
+void compare_touch_status(volatile touch_event_t *touch1,volatile touch_event_t *touch2)
+{
+    char* RED = "\033[31m";
+    char* GREEN = "\033[32m";
+    char* END = "\033[0m";
+    char* color;
+    printf("┌────Touch┬Status─CH%d──┐┌────Touch┬Status─CH%d──┐\r\n",1,2);
+    if (touch1->touches!=touch2->touches)
+    {
+        color = RED;
+    }
+    else
+    {
+        color = GREEN;
+    }
+    printf("│ %sTouches │    %05b   ││ Touches │    %05b  %s │\r\n",color,touch1->touches,touch2->touches,END);
+    printf("├─────────┼────────────┤├─────────┼────────────┤\r\n"); 
+    for (int i=0;i<5;i++)
+    {
+        if (((touch1->x[i]-touch2->x[i])*(touch1->x[i]-touch2->x[i]) + (touch1->y[i]-touch2->y[i])*(touch1->y[i]-touch2->y[i])) > (20*20))
+        {
+        color = RED;
+        }
+        else
+        {
+            color = GREEN;
+        }
+        printf("│%s x= %4d │  y= %4d   ││ x= %4d │  y= %4d  %s │\r\n",color,touch1->x[i],touch1->y[i],touch2->x[i],touch2->y[i],END);
+    }
+    printf("├─────────┼────────────┤├─────────┼────────────┤\r\n");
+    printf("│ Gesture │%12s││ Gesture │%12s│\r\n",gesture_to_string((int)(touch1->gesture)),gesture_to_string((int)(touch2->gesture)));
+    printf("├─────────┼────────────┤├─────────┼────────────┤\r\n");
+    printf("│ Sticky  │    %3d     ││ Sticky  │    %3d     │\r\n",touch1->sticky_touch_count,touch2->sticky_touch_count);
+    printf("└─────────┴────────────┘└─────────┴────────────┘\r\n");  
+    touch1->new_data = false; 
+    touch2->new_data = false; 
+}
+
 void erase_touch_status()
 {
     // back up 13 lines
     printf("\033[13A");
 }
 
-void clear_touch_event(touch_event_t *event)
+void clear_touch_event(volatile touch_event_t *event)
 {
     event->gesture = no_touch;
     for (int i=0;i<5;i++)
@@ -245,8 +312,10 @@ void clear_touch_event(touch_event_t *event)
 /// @param result Buffer w/ 24Bytes of data
 /// @param event touch structure output
 /// @return true for success, false for parsing error
-bool decode_touch(uint8_t *result, touch_event_t *event)
+bool decode_touch(uint8_t *result, volatile touch_event_t *event)
 {
+    uint16_t x,y;
+
     if (result[0] != 0x90)
     {
         //printf("Invalid touch response (header = 0x%x)\r\n",result[0]);
@@ -258,7 +327,9 @@ bool decode_touch(uint8_t *result, touch_event_t *event)
     event->touches = result[1];
     for (uint8_t i=0; i<5;i++)
     {
-        get_touch_pixel(result,i+1,&event->x[i],&event->y[i]);
+        get_touch_pixel(result,i+1,&x,&y);
+        event->x[i] = x;
+        event->y[i] = y;
     }
     
     event->sticky_touch_count = result[20];

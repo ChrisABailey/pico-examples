@@ -47,16 +47,18 @@ int is_gesture(uint8_t *result);
 bool get_touch_pixel(uint8_t *result, uint8_t touchNum, uint16_t *x, uint16_t *y);
 const char *gesture_to_string(uint8_t gesture);
 void print_touch(uint8_t *result);
-void print_touch_status(touch_event_t *touch);
+void print_touch_status(volatile touch_event_t *touch,uint8_t ch);
+void compare_touch_status(volatile touch_event_t *touch1,volatile touch_event_t *touch2);
 void erase_touch_status();
-void clear_touch_event(touch_event_t *event);
-bool decode_touch(uint8_t *result, touch_event_t *event);
+void clear_touch_event(volatile touch_event_t *event);
+bool decode_touch(uint8_t *result, volatile touch_event_t *event);
 uint8_t read_next_touch(uint8_t *result,int ch,bool wait);
 uint8_t read_next_gesture(uint8_t *result,int ch);
 uint8_t read_touch(uint8_t *result,int ch);
 uint32_t read_touch_fw_version(int ch);
 bool read_sticky_touch_location(int ch,uint8_t touch, uint16_t*TLX, uint16_t*TLY, uint16_t*BRX, uint16_t*BRY);
 uint8_t get_touch_addr(int ch);
+uint8_t clear_sticky_touch(uint8_t ch);
 
 #ifdef __cplusplus
  }

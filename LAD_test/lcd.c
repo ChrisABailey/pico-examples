@@ -401,7 +401,7 @@ void print_LCD_status(LCD_BIT_t* BIT)
     uint8_t s = BIT->elapsedTime.secs;
     printf("┌────────────LCD┬Status──┐\r\n");
     printf("│Elapsed Time   │%2d:%02d:%02d│\r\n",h,m,s);
-    printf("│LCD Temp       │ %2.1fdegC│\r\n",BIT->temperature);
+    printf("│LCD Temp       │%2.1fdegC│\r\n",BIT->temperature);
     printf("│LCD Good       │ %s   │\r\n",(BIT->lcdGood)?" OK ":"Fail");
     printf("│LVDS Timeout   │ %s   │\r\n",(BIT->lvdsTimeout)?" OK ":"Fail");
     printf("│DRP Source     │ %s   │\r\n",(BIT->drpSource)?" OK ":"Fail");
@@ -417,30 +417,30 @@ void print_LCD_status(LCD_BIT_t* BIT)
 
     if (BIT->bitLVDS == 0x0F)
     {
-        printf("│BIT LVDS        │  OK    │\r\n");
+        printf("│BIT LVDS       │  OK    │\r\n");
     } else
     {
-        printf("│BIT LVDS        │Fail(%2x)|\r\n",BIT->bitLVDS);
+        printf("│BIT LVDS       │Fail(%2x)|\r\n",BIT->bitLVDS);
     }
 
     if (BIT->bitLCD1 == 0xFF)
     {
-        printf("│BIT LCD1        │  OK    |\r\n");
+        printf("│BIT LCD1       │  OK    │\r\n");
     } else
     {
-        printf("│BIT LCD1        │Fail(%2x)|\r\n",BIT->bitLCD1);
+        printf("│BIT LCD1       │Fail(%2x)|\r\n",BIT->bitLCD1);
     }
 
     if (BIT->bitLCD2 == 0x07)
     {
-        printf("│BIT LCD2       │  OK   │\r\n");
+        printf("│BIT LCD2       │  OK    │\r\n");
     } else
     {
         printf("│BIT LCD2       │Fail(%2x)|\r\n",BIT->bitLCD2);
     }
     
-    printf("│ESD BUS SW HIGH │ %s   │\r\n",(BIT->ESDHigh)?" OK ":"Fail");
-    printf("│ESD BUS SW LOW  │ %s   │\r\n",(BIT->ESDLow)?" OK ":"Fail");
+    printf("│ESD BUS SW HIGH│ %s   │\r\n",(BIT->ESDHigh)?" OK ":"Fail");
+    printf("│ESD BUS SW LOW │ %s   │\r\n",(BIT->ESDLow)?" OK ":"Fail");
     printf("│Vdd SA current │ %4d   │\r\n",BIT->vddsaI);
     printf("│cop R1         │%02x,%02x,%02x│\r\n",BIT->copR1.r,BIT->copR1.g,BIT->copR1.b);
     printf("│cop R2         │%02x,%02x,%02x│\r\n",BIT->copR2.r,BIT->copR2.g,BIT->copR2.b);

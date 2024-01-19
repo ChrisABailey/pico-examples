@@ -63,4 +63,4 @@
 #define RAIL1 1 // First LED Rail (when reading thermistor)
 #define RAIL2 2 // Second LED Rail (when reading thermistor)
 
-extern critical_section_t critsec;
+extern critical_section_t lcd_critsec;

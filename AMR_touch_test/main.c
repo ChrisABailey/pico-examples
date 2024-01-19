@@ -13,7 +13,7 @@
 #include "lcd.h"
 #include "touch.h"
 
-
+struct repeating_timer statusTimer;
 int touch_channels=0;
 touch_event_t last_touch[3];
 bool gesture_filter = false;
@@ -25,7 +25,7 @@ const char menu[] = "\r\n20x8 Touch Tester:\r\n"
                         "\tF - Get Next Touch Response...\r\n"
                        "\tG -  Filter for Gestures (toggle)...\r\n"
                        "\tUx - Get Stuck Touch Location (x1-5)\r\n"
-                       "\tM - Enable/disable Driver Channels...\r\n";
+                       "\tC - Clear Sticky Touchs...\r\n";
                        
 
 const char BACKSPACE = 127;
@@ -112,12 +112,15 @@ bool touch_status_timer_callback(struct repeating_timer *t) {
     if(0==read_next_touch(touch_resp,ch,false))
     {
         if (!gesture_filter || is_gesture(touch_resp) )
+        {
             decode_touch(touch_resp,&last_touch[ch]);
+            gpio_put(LED_PIN, (ch==CH1));
+        }
     }
     // next time read the other channel
     ch = (ch==CH1)?CH2:CH1;
     //critical_section_exit (&critsec);
-    gpio_put(LED_PIN, (ch==CH1));
+
 
     return true;
 }
@@ -150,37 +153,6 @@ void initialize()
 
 
 
-void printStatus()
-{   
-    printf("┌─────Board Status─┬──────┐\r\n");
-    printf("│PWM percentage    │%5.2f%%│\r\n",get_pwm()*100);
-    printf("│BIT_CH1 Discrete  │ %s │\r\n",gpio_get(BIT_CH1_PIN)?" OK ":"FAIL");
-    printf("│BIT_CH2 Discret   │ %s │\r\n",gpio_get(BIT_CH2_PIN)?" OK ":"FAIL");
-    printf("│TEMP_OK_CH1       │ %s │\r\n",gpio_get(TEMP_OK_CH1_PIN)?" OK ":"FAIL");
-    printf("│TEMP_OK_CH2       │ %s │\r\n",gpio_get(TEMP_OK_CH2_PIN)?" OK ":"FAIL");
-    printf("│LCD_ALARM_CH1     │ %s │\r\n",gpio_get(LCD_ALARM_CH1_PIN)?" OK ":"FAIL");
-    printf("│LCD_ALARM_CH2     │ %s │\r\n",gpio_get(LCD_ALARM_CH2_PIN)?" OK ":"FAIL");
-    printf("│CH1 Display Enable│ %s │\r\n",gpio_get(PD_CH1_PIN)?" ON ":"OFF ");
-    printf("│CH2 Display Enable│ %s │\r\n",gpio_get(PD_CH2_PIN)?" ON ":"OFF ");
-    printf("│                  │      │\r\n");
-    printf("│CH1 BIT Register: │ ");
-    print_bit(read_bit(CH1));
-    printf(" │\r\n");
-    printf("│CH2 BIT Register: │ ");
-    print_bit(read_bit(CH2));
-    printf(" │\r\n");
-    printf("│CH1 LED IC Status:│ ");
-    uint32_t resultCH1 = read_led_bit(CH1);
-    print_led_bit(resultCH1);
-    printf(" │\r\n");
-    printf("│CH2 LED IC Status:│ ");
-    uint32_t resultCH2 = read_led_bit(CH2);
-    print_led_bit(resultCH2);
-    printf(" │\r\n");
-    printf("└──────────────────┴──────┘\r\n");
-    isolate_led_bit(resultCH1,resultCH2);
-}
-
 
 
 // Process user keystrokes
@@ -204,6 +176,7 @@ int handleMenuKey(char key,bool echo)
 
         case 'f':
         {
+            //start_touch_status_timer();
             printf("\r\nWaiting 5Sec for Touch...\r\n");
 
             uint32_t startTime;
@@ -221,7 +194,7 @@ int handleMenuKey(char key,bool echo)
                     if (time_us_32() > startTime+(5*1000000)) // give up after 5 sec
                         break;
                 }
-                print_touch_status(&last_touch[CH1]);
+                print_touch_status(&last_touch[CH1],CH1);
             }
             
             startTime = time_us_32();
@@ -232,9 +205,12 @@ int handleMenuKey(char key,bool echo)
                     if (time_us_32() > startTime+(2*1000000)) // give up after 2 sec
                         break;
                 }
-                print_touch_status(&last_touch[CH2]);
+                print_touch_status(&last_touch[CH2],CH2);
             }
+
+            //start_lcd_status_timer();
             break;
+
         }
 
         case 'i':
@@ -245,31 +221,49 @@ int handleMenuKey(char key,bool echo)
             break;
         }
 
-        case 'm': {
-            printf("Enable channels (01,02,03(both)) currently (%02d):", get_connected_channels());
-            int newValue = getInt(echo);
-            if (newValue >= 1 && newValue <= 3)
-            {
+        //case 'm': {
+        //    printf("Enable channels (01,02,03(both)) currently (%02d):", get_connected_channels());
+        //    int newValue = getInt(echo);
+        //    if (newValue >= 1 && newValue <= 3)
+        //    {
 
-                touch_channels = newValue;
-                set_connected_channels(newValue);
+        //        touch_channels = newValue;
+        //        set_connected_channels(newValue);
                 //printf("Set successful\r\n");
-            }
-            break;
-        }
+        //    }
+        //    break;
+        //}
         case 'r':
         {
-            //printf("Resetting Touch..");
+
+            cancel_repeating_timer(&statusTimer);
+            printf("Resetting Touch..\r\n");
             touch_reset();
+
+            busy_wait_ms(10);
             clear_touch_event(&last_touch[CH1]);
             clear_touch_event(&last_touch[CH2]);
 
+            printf("Read FW Versions\r\n");
             uint32_t rc;
             rc = read_touch_fw_version(CH1);
             printf("\r\nTouch CH1 Firmware Ver: %x.%x.%x\r\n",(rc >> 16),(rc&0xFF00)>>8,(rc & 0x0FF));
             rc = read_touch_fw_version(CH2);
             printf("Touch CH2 Firmware Ver: %x.%x.%x\r\n",(rc >> 16),(rc&0xFF00)>>8,(rc & 0x0FF));
 
+            add_repeating_timer_ms(20, touch_status_timer_callback, NULL, &statusTimer);
+            break;
+        }
+
+        case 'c':
+        {
+
+            cancel_repeating_timer(&statusTimer);
+
+            printf("Clearing sticky Touches\r\n");
+            clear_sticky_touch(CH1);
+            clear_sticky_touch(CH2);
+            add_repeating_timer_ms(20, touch_status_timer_callback, NULL, &statusTimer);
             break;
         }
 
@@ -312,32 +306,15 @@ int main() {
     bool autoTest=false;
     bool echo = true;
     int ledOn = 0;
-    struct repeating_timer statusTimer;
 
     gpio_init(LED_PIN);
     gpio_set_dir(LED_PIN, GPIO_OUT);
 
-    //gpio_init(BIT_CH1_PIN      );
-    //gpio_init(BIT_CH2_PIN      );
-    //gpio_init(TEMP_OK_CH1_PIN  );
-    //gpio_init(TEMP_OK_CH2_PIN  );
-    //gpio_init(LCD_ALARM_CH1_PIN);
-    //gpio_init(LCD_ALARM_CH2_PIN);
-    //gpio_init(PD_CH1_PIN       );
-    //gpio_init(PD_CH2_PIN       );
     gpio_init(TOUCH_CH1_PIN    );
     gpio_init(TOUCH_CH2_PIN    );
     gpio_init(TOUCH_CH1_RESET  );
     gpio_init(TOUCH_CH2_RESET  );   
 
-    // gpio_set_dir(BIT_CH1_PIN      ,GPIO_IN);
-    // gpio_set_dir(BIT_CH2_PIN      ,GPIO_IN);
-    // gpio_set_dir(TEMP_OK_CH1_PIN  ,GPIO_IN);
-    // gpio_set_dir(TEMP_OK_CH2_PIN  ,GPIO_IN);
-    // gpio_set_dir(LCD_ALARM_CH1_PIN,GPIO_IN);
-    // gpio_set_dir(LCD_ALARM_CH2_PIN,GPIO_IN);
-    // gpio_set_dir(PD_CH1_PIN       ,GPIO_IN);
-    // gpio_set_dir(PD_CH2_PIN       ,GPIO_IN);
     gpio_set_dir(TOUCH_CH1_PIN       ,GPIO_IN);
     gpio_set_dir(TOUCH_CH2_PIN       ,GPIO_IN);
     gpio_set_dir(TOUCH_CH1_RESET, GPIO_OUT);
@@ -356,8 +333,7 @@ int main() {
 
     initialize();
 
-    // Create a repeating timer that reads the LCD status uarts.
-    //add_repeating_timer_ms(14, lcd_status_timer_callback, NULL, &statusTimer);
+    // Create a repeating timer that reads the Touch Controller
     add_repeating_timer_ms(20, touch_status_timer_callback, NULL, &statusTimer);
     //gpio_set_irq_enabled_with_callback(2, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
 
@@ -371,20 +347,29 @@ int main() {
             if (handleMenuKey(key,echo) == '7')  // The 7 key toggles autotest
             {
                 autoTest = !autoTest;
-
-                printf("auto-test = %s\r\n",autoTest?"On":"Off");
-                print_touch_status(&last_touch[CH1]);
-                clear_touch_event(&last_touch[CH1]);
-                clear_touch_event(&last_touch[CH2]);
+                if (autoTest)
+                {
+                    printf("\r\nTouch auto-test mode, (press 7 to exit)\r\n");
+                    if (gesture_filter)
+                    {
+                        printf("Note: Gesture Filter is active, (press G to toggle filter off)\r\n");
+                    }
+                    compare_touch_status(&last_touch[CH1],&last_touch[CH2]);
+                }
+                else
+                {
+                    prompt(echo);
+                }
             }
             stdio_flush();
         }
         if (autoTest)
         {
-            if (last_touch[CH1].new_data)
+            if (last_touch[CH1].new_data || last_touch[CH2].new_data)
             {
                 erase_touch_status();
-                print_touch_status(&last_touch[CH1]); 
+                compare_touch_status(&last_touch[CH1],&last_touch[CH2]);
+
             }
         }
         ledOn= !ledOn;
