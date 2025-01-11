@@ -17,7 +17,7 @@
    inbuilt FIFO to make it more useful.
 
    NOTE: Ensure the device is capable of being driven at 3.3v NOT 5v. The Pico
-   GPIO (and therefor I2C) cannot be used at 5v.
+   GPIO (and therefore I2C) cannot be used at 5v.
 
    You will need to use a level shifter on the I2C lines if you want to run the
    board at 5v.
@@ -39,6 +39,12 @@ static void mpu6050_reset() {
     // There are a load more options to set up the device in different ways that could be added here
     uint8_t buf[] = {0x6B, 0x80};
     i2c_write_blocking(i2c_default, addr, buf, 2, false);
+    sleep_ms(100); // Allow device to reset and stabilize
+
+    // Clear sleep mode (0x6B register, 0x00 value)
+    buf[1] = 0x00;  // Clear sleep mode by writing 0x00 to the 0x6B register
+    i2c_write_blocking(i2c_default, addr, buf, 2, false); 
+    sleep_ms(10); // Allow stabilization after waking up
 }
 
 static void mpu6050_read_raw(int16_t accel[3], int16_t gyro[3], int16_t *temp) {

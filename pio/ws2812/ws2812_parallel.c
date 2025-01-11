@@ -19,6 +19,11 @@
 #define NUM_PIXELS 64
 #define WS2812_PIN_BASE 2
 
+// Check the pin is compatible with the platform
+#if WS2812_PIN_BASE >= NUM_BANK0_GPIOS
+#error Attempting to use a pin>=32 on a platform that does not support it
+#endif
+
 // horrible temporary hack to avoid changing pattern code
 static uint8_t *current_strip_out;
 static bool current_strip_4color;
@@ -56,21 +61,21 @@ void pattern_snakes(uint len, uint t) {
 void pattern_random(uint len, uint t) {
     if (t % 8)
         return;
-    for (int i = 0; i < len; ++i)
+    for (uint i = 0; i < len; ++i)
         put_pixel(rand());
 }
 
 void pattern_sparkle(uint len, uint t) {
     if (t % 8)
         return;
-    for (int i = 0; i < len; ++i)
+    for (uint i = 0; i < len; ++i)
         put_pixel(rand() % 16 ? 0 : 0xffffffff);
 }
 
 void pattern_greys(uint len, uint t) {
-    int max = 100; // let's not draw too much current!
+    uint max = 100; // let's not draw too much current!
     t %= max;
-    for (int i = 0; i < len; ++i) {
+    for (uint i = 0; i < len; ++i) {
         put_pixel(t * 0x10101);
         if (++t >= max) t = 0;
     }
@@ -78,7 +83,7 @@ void pattern_greys(uint len, uint t) {
 
 void pattern_solid(uint len, uint t) {
     t = 1;
-    for (int i = 0; i < len; ++i) {
+    for (uint i = 0; i < len; ++i) {
         put_pixel(t * 0x10101);
     }
 }
@@ -101,7 +106,7 @@ void pattern_fade(uint len, uint t) {
     slow_t >>= shift;
     slow_t *= 0x010101;
 
-    for (int i = 0; i < len; ++i) {
+    for (uint i = 0; i < len; ++i) {
         put_pixel(slow_t);
     }
 }
@@ -156,7 +161,7 @@ void transform_strips(strip_t **strips, uint num_strips, value_bits_t *values, u
                        uint frac_brightness) {
     for (uint v = 0; v < value_length; v++) {
         memset(&values[v], 0, sizeof(values[v]));
-        for (int i = 0; i < num_strips; i++) {
+        for (uint i = 0; i < num_strips; i++) {
             if (v < strips[i]->data_len) {
                 // todo clamp?
                 uint32_t value = (strips[i]->data[v] * strips[i]->frac_brightness) >> 8u;
@@ -219,7 +224,7 @@ static struct semaphore reset_delay_complete_sem;
 // alarm handle for handling delay
 alarm_id_t reset_delay_alarm_id;
 
-int64_t reset_delay_complete(alarm_id_t id, void *user_data) {
+int64_t reset_delay_complete(__unused alarm_id_t id, __unused void *user_data) {
     reset_delay_alarm_id = 0;
     sem_release(&reset_delay_complete_sem);
     // no repeat
@@ -278,12 +283,17 @@ void output_strips_dma(value_bits_t *bits, uint value_length) {
 int main() {
     //set_sys_clock_48();
     stdio_init_all();
-    puts("WS2812 parallel");
+    printf("WS2812 parallel using pin %d\n", WS2812_PIN_BASE);
 
-    // todo get free sm
-    PIO pio = pio0;
-    int sm = 0;
-    uint offset = pio_add_program(pio, &ws2812_parallel_program);
+    PIO pio;
+    uint sm;
+    uint offset;
+
+    // This will find a free pio and state machine for our program and load it for us
+    // We use pio_claim_free_sm_and_add_program_for_gpio_range (for_gpio_range variant)
+    // so we will get a PIO instance suitable for addressing gpios >= 32 if needed and supported by the hardware
+    bool success = pio_claim_free_sm_and_add_program_for_gpio_range(&ws2812_parallel_program, &pio, &sm, &offset, WS2812_PIN_BASE, count_of(strips), true);
+    hard_assert(success);
 
     ws2812_parallel_program_init(pio, sm, offset, WS2812_PIN_BASE, count_of(strips), 800000);
 
@@ -318,4 +328,7 @@ int main() {
         }
         memset(&states, 0, sizeof(states)); // clear out errors
     }
+
+    // This will free resources and unload our program
+    pio_remove_program_and_unclaim_sm(&ws2812_parallel_program, pio, sm, offset);
 }
