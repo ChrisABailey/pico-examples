@@ -1,4 +1,27 @@
+<<<<<<< HEAD
 # Raspberry Pi Pico SDK Examples
+=======
+# Raspberry Pi RP2350 Pico SDK Examples - Early Access
+Note for building in VScode, I nneded to set an enviromental variable to point to the location of the pico sdk.
+
+Click on the wheel (settings) icon on lower left of VSCode and select settings then Extensions then CMAke Tools.
+
+Under CMake:Config Environment add a key "PICO_SDK_PATH" with value of the full path to the SDK.  I did this under the "Users" section but I think you could also do it under the "Workspace" section
+
+
+## RP2350 Instructions
+
+Everything below this section is from the stock pico-examples, so ignore URLs etc., but generally instructions are the same.
+
+The Pico SDK default continues to be to build for RP2040 (PICO_PLATFORM=rp2040), so to build for RP2350, you need to pass
+`-DPICO_PLATFORM=rp2350` to CMake (or `-DPICO_PLATFORM=rp2350-riscv` for RISC-V).
+
+Most, but not all examples, currently work on RP2350 however you should be able to do a full build with any of the above platforms (PICO_PLATFORM=host however currently fails on some examples)
+
+For RISC-V compilation, you should take a compiler from here: https://www.embecosm.com/resources/tool-chain-downloads/#riscv-stable
+
+# Original pico-examples docs
+>>>>>>> 4c65e0d (Update readme with hints to build issues)
 
 ## Getting started
 
