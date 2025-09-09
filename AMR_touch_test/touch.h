@@ -31,6 +31,7 @@ typedef enum {
 typedef struct
 {   
     bool    new_data;
+    uint8_t raw[TOUCH_RESP_LEN];
     uint8_t touches;
     uint16_t x[5];
     uint16_t y[5];
@@ -51,7 +52,7 @@ void print_touch_status(volatile touch_event_t *touch,uint8_t ch);
 void compare_touch_status(volatile touch_event_t *touch1,volatile touch_event_t *touch2);
 void erase_touch_status();
 void clear_touch_event(volatile touch_event_t *event);
-bool decode_touch(uint8_t *result, volatile touch_event_t *event);
+bool decode_touch(volatile touch_event_t *event);
 uint8_t read_next_touch(uint8_t *result,int ch,bool wait);
 uint8_t read_next_gesture(uint8_t *result,int ch);
 uint8_t read_touch(uint8_t *result,int ch);

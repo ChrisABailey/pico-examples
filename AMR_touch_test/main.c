@@ -101,19 +101,35 @@ void prompt(bool echo)
 
 //     return true;
 // }
+void read_touch_isr(uint gpio, uint32_t events) {
+    int ch = 0;
+    if (gpio == TOUCH_CH1_PIN) ch = CH1;
+    else if (gpio == TOUCH_CH2_PIN) ch = CH2;
+    else return; // not a touch pin
+    gpio_set_irq_enabled(TOUCH_CH1_PIN, GPIO_IRQ_EDGE_FALL, false);
+    gpio_set_irq_enabled(TOUCH_CH2_PIN, GPIO_IRQ_EDGE_FALL, false);
+    last_touch[ch].new_data = false;
+    if (0==read_touch(last_touch[ch].raw,ch))  // return 0 on success
+    {
+        last_touch[ch].new_data = true;
+        gpio_put(LED_PIN, true);
+    }
+    gpio_set_irq_enabled(TOUCH_CH1_PIN, GPIO_IRQ_EDGE_FALL, true);
+    gpio_set_irq_enabled(TOUCH_CH2_PIN, GPIO_IRQ_EDGE_FALL, true);
 
+}
 // read info from the touch i2c and update TOUCH_EVENT structures
 bool touch_status_timer_callback(struct repeating_timer *t) {
     static int ch = CH1;
-    static uint8_t touch_resp[TOUCH_RESP_LEN];
+    
 
     //critical_section_enter_blocking (&critsec);
     // this should take less than 1 frame and typically < 3.5mS
-    if(0==read_next_touch(touch_resp,ch,false))
+    if(0==read_next_touch(last_touch[ch].raw,ch,false))
     {
-        if (!gesture_filter || is_gesture(touch_resp) )
+        if (!gesture_filter || is_gesture(last_touch[ch].raw) )
         {
-            decode_touch(touch_resp,&last_touch[ch]);
+            decode_touch(&last_touch[ch]);
             gpio_put(LED_PIN, (ch==CH1));
         }
     }
@@ -334,8 +350,9 @@ int main() {
     initialize();
 
     // Create a repeating timer that reads the Touch Controller
-    add_repeating_timer_ms(20, touch_status_timer_callback, NULL, &statusTimer);
-    //gpio_set_irq_enabled_with_callback(2, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, &gpio_callback);
+    //add_repeating_timer_ms(20, touch_status_timer_callback, NULL, &statusTimer);
+    gpio_set_irq_enabled_with_callback(TOUCH_CH1_PIN, GPIO_IRQ_EDGE_FALL, true, &read_touch_isr);
+    gpio_set_irq_enabled_with_callback(TOUCH_CH2_PIN, GPIO_IRQ_EDGE_FALL, true, &read_touch_isr);
 
     prompt(echo);
     
@@ -367,7 +384,16 @@ int main() {
         {
             if (last_touch[CH1].new_data || last_touch[CH2].new_data)
             {
+                if (last_touch[CH1].new_data && (!gesture_filter || is_gesture(last_touch[CH1].raw)))
+                {
+                    decode_touch(&last_touch[CH1]);
+                }
+                if (last_touch[CH2].new_data && (!gesture_filter || is_gesture(last_touch[CH2].raw)))
+                {
+                    decode_touch(&last_touch[CH2]);
+                }
                 erase_touch_status();
+                gpio_put(LED_PIN, false);
                 compare_touch_status(&last_touch[CH1],&last_touch[CH2]);
 
             }

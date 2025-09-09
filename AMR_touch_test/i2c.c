@@ -15,8 +15,8 @@ bool reserved_addr(uint8_t addr) {
 }
 
 void i2c_init_all(){
-    i2c_init(i2c0, 10 * 1000);
-    i2c_init(i2c1, 10 * 1000);
+    i2c_init(i2c0, 400 * 1000);
+    i2c_init(i2c1, 400 * 1000);
     gpio_set_function(I2C_CH1_SDA_PIN, GPIO_FUNC_I2C);
     gpio_set_function(I2C_CH1_SCL_PIN, GPIO_FUNC_I2C);
     gpio_set_function(I2C_CH2_SDA_PIN, GPIO_FUNC_I2C);

@@ -4,6 +4,7 @@
 #include "IDC_IO.h"
 #include "touch.h"
 #include "i2c.h"
+#include <string.h>
 
 int i2c_tchannels = 0;
 uint8_t touch_addr_ch1, touch_addr_ch2;
@@ -312,9 +313,11 @@ void clear_touch_event(volatile touch_event_t *event)
 /// @param result Buffer w/ 24Bytes of data
 /// @param event touch structure output
 /// @return true for success, false for parsing error
-bool decode_touch(uint8_t *result, volatile touch_event_t *event)
+bool decode_touch(volatile touch_event_t *event)
 {
     uint16_t x,y;
+    uint8_t result[TOUCH_RESP_LEN];
+    strcpy(result, event->raw);
 
     if (result[0] != 0x90)
     {
