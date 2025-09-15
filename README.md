@@ -1,8 +1,5 @@
-<<<<<<< HEAD
-# Raspberry Pi Pico SDK Examples
-=======
-# Raspberry Pi RP2350 Pico SDK Examples - Early Access
-Note for building in VScode, I nneded to set an enviromental variable to point to the location of the pico sdk.
+# Raspberry Pi RP2350 Pico SDK Examples + IDC Pico SDK Projects 
+Note for building in VScode, I needed to set an enviromental variable to point to the location of the pico sdk.
 
 Click on the wheel (settings) icon on lower left of VSCode and select settings then Extensions then CMAke Tools.
 
